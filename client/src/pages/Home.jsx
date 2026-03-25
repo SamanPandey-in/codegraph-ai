@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 
+/** Base URL of the backend API. In dev the Vite proxy handles an empty string. */
+const API_BASE = import.meta.env.VITE_API_URL || '';
+
 /**
  * Home page – lets the user enter a local project path and trigger analysis.
  *
@@ -19,7 +22,7 @@ export default function Home({ onGraphReady }) {
     setError('');
 
     try {
-      const { data } = await axios.post('/analyze', { path: projectPath.trim() });
+      const { data } = await axios.post(`${API_BASE}/analyze`, { path: projectPath.trim() });
       onGraphReady(data);
     } catch (err) {
       setError(
