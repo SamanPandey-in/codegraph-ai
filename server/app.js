@@ -1,10 +1,12 @@
+import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import passport from 'passport';
 import { Strategy as GitHubStrategy } from 'passport-github2';
 import jwt from 'jsonwebtoken';
-import mongoose from 'mongoose';
+
+dotenv.config();
 
 const app = express();
 
@@ -19,16 +21,7 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use(passport.initialize());
 
-const UserSchema = new mongoose.Schema({
-  githubId: { type: String, unique: true, sparse: true },
-  username: { type: String, required: true },
-  email: { type: String },
-  avatar: { type: String },
-  role: { type: String, enum: ['USER', 'MANAGER', 'TECHNICIAN'], default: 'USER' },
-  createdAt: { type: Date, default: Date.now },
-});
-
-const User = mongoose.model('User', UserSchema);
+const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
 
 passport.use(new GitHubStrategy({
   clientID: process.env.GITHUB_CLIENT_ID,
@@ -36,73 +29,54 @@ passport.use(new GitHubStrategy({
   callbackURL: '/api/auth/github/callback',
 }, async (accessToken, refreshToken, profile, done) => {
   try {
-    let user = await User.findOne({ githubId: profile.id });
-    
-    if (!user) {
-      user = await User.create({
-        githubId: profile.id,
-        username: profile.username,
-        email: profile.emails?.[0]?.value,
-        avatar: profile.photos?.[0]?.value,
-      });
-    }
-    
+    const user = {
+      id: profile.id,
+      username: profile.username,
+      email: profile.emails?.[0]?.value,
+      avatar: profile.photos?.[0]?.value,
+      role: 'USER',
+    };
     return done(null, user);
   } catch (error) {
     return done(error, null);
   }
 }));
 
-passport.serializeUser((user, done) => {
-  done(null, user.id);
-});
-
-passport.deserializeUser(async (id, done) => {
-  try {
-    const user = await User.findById(id);
-    done(null, user);
-  } catch (error) {
-    done(error, null);
-  }
-});
-
 app.get('/api/auth/github', passport.authenticate('github', { scope: ['user:email'] }));
 
 app.get('/api/auth/github/callback',
-  passport.authenticate('github', { failureRedirect: '/login' }),
+  passport.authenticate('github', { session: false, failureRedirect: `${clientUrl}/login` }),
   (req, res) => {
     const token = jwt.sign(
-      { id: req.user._id, role: req.user.role },
+      { id: req.user.id, username: req.user.username, email: req.user.email, avatar: req.user.avatar, role: req.user.role },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
-    
+
     res.cookie('token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
-    
-    res.redirect(`${process.env.CLIENT_URL}/dashboard`);
+
+    res.redirect(`${clientUrl}/home`);
   }
 );
 
 app.get('/api/auth/me', (req, res) => {
   const token = req.cookies.token || req.headers.authorization?.replace('Bearer ', '');
-  
+
   if (!token) {
-    return res.status(401).json({ message: 'Not authenticated' });
+    return res.json({ data: null });
   }
-  
+
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    User.findById(decoded.id).then(user => {
-      if (!user) return res.status(404).json({ message: 'User not found' });
-      res.json({ data: user });
-    });
+    res.json({ data: decoded });
   } catch (error) {
-    res.status(401).json({ message: 'Invalid token' });
+    res.clearCookie('token');
+    res.json({ data: null });
   }
 });
 

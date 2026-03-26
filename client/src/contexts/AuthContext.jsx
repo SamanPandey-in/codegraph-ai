@@ -1,7 +1,19 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { authAPI, userAPI } from '../services/api';
+import { AUTH_UNAUTHORIZED_EVENT, authAPI, userAPI } from '../services/api';
 
 const AuthContext = createContext(null);
+let initialAuthRequest = null;
+
+const getInitialUser = async () => {
+  if (!initialAuthRequest) {
+    initialAuthRequest = userAPI
+      .getCurrentUser()
+      .then((response) => response.data.data ?? null)
+      .catch(() => null);
+  }
+
+  return initialAuthRequest;
+};
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
@@ -17,17 +29,28 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const initAuth = async () => {
-      try {
-        const response = await userAPI.getCurrentUser();
-        setUser(response.data.data);
-      } catch (error) {
+      const currentUser = await getInitialUser();
+      setUser(currentUser);
+      if (!currentUser) {
         localStorage.removeItem('user');
-      } finally {
-        setLoading(false);
       }
+      setLoading(false);
     };
 
     initAuth();
+  }, []);
+
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      setUser(null);
+      setLoading(false);
+    };
+
+    window.addEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
+
+    return () => {
+      window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
+    };
   }, []);
 
   const loginWithGithub = () => {
@@ -43,6 +66,7 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
+      initialAuthRequest = Promise.resolve(null);
       localStorage.removeItem('user');
       setUser(null);
     }
@@ -54,9 +78,7 @@ export const AuthProvider = ({ children }) => {
     logout,
     loading,
     isAuthenticated: !!user,
-    isAdmin: user?.role === 'MANAGER',
-    isManager: user?.role === 'MANAGER',
-    isTechnician: user?.role === 'TECHNICIAN',
+    isAdmin: user?.role === 'ADMIN',
     isUser: user?.role === 'USER',
   };
 

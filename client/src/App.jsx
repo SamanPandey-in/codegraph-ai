@@ -21,7 +21,7 @@ const ProtectedRoute = ({ children }) => {
     );
   }
 
-  return isAuthenticated ? children : <Navigate to="/login" />;
+  return isAuthenticated ? children : <Navigate to="/login" replace />;
 };
 
 // Public Route Component (redirect to dashboard if already authenticated)
@@ -36,7 +36,7 @@ const PublicRoute = ({ children }) => {
     );
   }
 
-  return !isAuthenticated ? children : <Navigate to="/home" />;
+  return !isAuthenticated ? children : <Navigate to="/home" replace />;
 };
 
 function AppRoutes() {
@@ -63,19 +63,18 @@ function AppRoutes() {
 
       {/* Protected Routes */}
       <Route
-        path="/*"
         element={
           <ProtectedRoute>
             <Layout />
           </ProtectedRoute>
         }
       >
-        <Route path="home" element={<Home />} />
-        {/* Add more routes */}
+        <Route path="/home" element={<Home />} />
+        <Route path="/dashboard" element={<Navigate to="/home" replace />} />
       </Route>
 
       {/* Catch all */}
-      <Route path="*" element={<Navigate to="/" />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

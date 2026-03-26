@@ -1,5 +1,7 @@
 import axios from 'axios';
 
+export const AUTH_UNAUTHORIZED_EVENT = 'auth:unauthorized';
+
 const API_URL = import.meta.env.VITE_API_BASE_URL 
   ? `${import.meta.env.VITE_API_BASE_URL}/api`
   : 'http://localhost:5000/api';
@@ -17,7 +19,9 @@ api.interceptors.response.use(
   async (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('user');
-      window.location.href = '/login';
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event(AUTH_UNAUTHORIZED_EVENT));
+      }
     }
     return Promise.reject(error);
   }

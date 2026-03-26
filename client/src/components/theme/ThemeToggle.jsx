@@ -1,21 +1,22 @@
-// Gives the user a button to toggle between light and dark themes.
-import { IconButton, Tooltip } from "@mui/material";
+// Theme toggle button for switching between light and dark themes
 import { Sun, Moon } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { toggleTheme } from "../../store/slices/themeSlice";
+import { Button } from "@/components/ui/button";
 
 export default function ThemeToggle() {
   const dispatch = useDispatch();
   const mode = useSelector((state) => state.theme.mode);
 
   return (
-    <Tooltip title="Toggle theme">
-      <IconButton
-        onClick={() => dispatch(toggleTheme())}
-        className="text-black dark:text-white" // automatic icon color
-      >
-        {mode === "dark" ? <Sun /> : <Moon />}
-      </IconButton>
-    </Tooltip>
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={() => dispatch(toggleTheme())}
+      aria-label="Toggle theme"
+      className="size-9"
+    >
+      {mode === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
+    </Button>
   );
 }

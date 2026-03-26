@@ -153,8 +153,6 @@ const {
   logout,
   isAuthenticated,
   isAdmin,
-  isManager,
-  isTechnician,
   isUser
 } = useAuth();
 ```
