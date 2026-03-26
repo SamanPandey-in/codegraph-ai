@@ -15,65 +15,27 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Check for existing session on mount
   useEffect(() => {
     const initAuth = async () => {
-      const token = localStorage.getItem('accessToken');
-      const storedUser = localStorage.getItem('user');
-
-      if (token && storedUser) {
-        try {
-          // Verify token by fetching current user
-          const response = await userAPI.getCurrentUser();
-          const userData = response.data.data;
-          setUser(userData);
-          localStorage.setItem('user', JSON.stringify(userData));
-        } catch (error) {
-          // Token invalid, clear storage
-          localStorage.removeItem('accessToken');
-          localStorage.removeItem('user');
-          setUser(null);
-        }
+      try {
+        const response = await userAPI.getCurrentUser();
+        setUser(response.data.data);
+      } catch (error) {
+        localStorage.removeItem('user');
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     initAuth();
   }, []);
 
-
-  const login = async (email, password) => {
-    try {
-      const response = await authAPI.login(email, password);
-      const { accessToken, user: userData } = response.data.data;
-
-      localStorage.setItem('accessToken', accessToken);
-      localStorage.setItem('user', JSON.stringify(userData));
-      setUser(userData);
-
-      return { success: true, user: userData };
-    } catch (error) {
-      const message = error.response?.data?.message || 'Login failed';
-      return { success: false, error: message };
-    }
+  const loginWithGithub = () => {
+    const baseUrl = import.meta.env.VITE_API_BASE_URL 
+      ? `${import.meta.env.VITE_API_BASE_URL}/api`
+      : 'http://localhost:5000/api';
+    window.location.href = `${baseUrl}/auth/github`;
   };
-
-
-  const signup = async (data) => {
-    try {
-      // data: { username, email, fullName, password, role }
-      const response = await authAPI.signup(data);
-      const userData = response.data.data;
-
-      // After signup, auto login
-      const loginResult = await login(data.email, data.password);
-      return loginResult;
-    } catch (error) {
-      const message = error.response?.data?.message || 'Signup failed';
-      return { success: false, error: message };
-    }
-  };
-
 
   const logout = async () => {
     try {
@@ -81,17 +43,14 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
-      localStorage.removeItem('accessToken');
       localStorage.removeItem('user');
       setUser(null);
     }
   };
 
-
   const value = {
     user,
-    login,
-    signup,
+    loginWithGithub,
     logout,
     loading,
     isAuthenticated: !!user,
@@ -100,7 +59,6 @@ export const AuthProvider = ({ children }) => {
     isTechnician: user?.role === 'TECHNICIAN',
     isUser: user?.role === 'USER',
   };
-
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
