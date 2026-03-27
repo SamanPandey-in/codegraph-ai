@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import ThemeProvider from './components/theme/ThemeProvider.jsx'
@@ -8,6 +8,10 @@ import Layout from './components/layout/Layout';
 
 // Pages
 import { Landing, Login, Signup, Home } from './pages/index'
+
+// Features
+import { GraphPage } from './features/graph/index.js';
+import GraphHome from './features/graph/pages/Home.jsx';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -39,11 +43,30 @@ const PublicRoute = ({ children }) => {
   return !isAuthenticated ? children : <Navigate to="/home" replace />;
 };
 
+// Graph Analysis Wrapper
+function GraphAnalyzer() {
+  const [graph, setGraph] = useState(null);
+
+  if (graph) {
+    return (
+      <GraphPage
+        graph={graph}
+        onReset={() => setGraph(null)}
+      />
+    );
+  }
+
+  return (
+    <GraphHome onGraphReady={setGraph} />
+  );
+}
+
 function AppRoutes() {
   return (
     <Routes>
       {/* Public Routes */}
       <Route path="/" element={<Landing />} />
+      <Route path="/analyze" element={<GraphAnalyzer />} />
       <Route
         path="/login"
         element={

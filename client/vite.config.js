@@ -11,4 +11,11 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    proxy: {
+      '/analyze': 'http://localhost:5000',
+      '/api': 'http://localhost:5000',
+      '/health': 'http://localhost:5000',
+    },
+  },
 })

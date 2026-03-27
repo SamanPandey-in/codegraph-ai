@@ -5,6 +5,8 @@ import cookieParser from 'cookie-parser';
 import passport from 'passport';
 import { Strategy as GitHubStrategy } from 'passport-github2';
 import jwt from 'jsonwebtoken';
+import { requestLogger } from './src/utils/logger.js';
+import { analyzeRouter } from './features/analyze/index.js';
 
 dotenv.config();
 
@@ -18,6 +20,8 @@ app.use(cors({
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+app.use(requestLogger);
 
 app.use(passport.initialize());
 
@@ -83,6 +87,14 @@ app.get('/api/auth/me', (req, res) => {
 app.post('/api/auth/logout', (req, res) => {
   res.clearCookie('token');
   res.json({ message: 'Logged out' });
+});
+
+// Feature: Analyze
+app.use('/analyze', analyzeRouter);
+
+// Health check
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok' });
 });
 
 export default app;
