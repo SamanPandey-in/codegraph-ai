@@ -298,7 +298,7 @@ export default function DashboardPage() {
     <div className="flex flex-col gap-10 py-6">
       <div className="animate-in fade-in slide-in-from-top-4 duration-700">
         <h1 className="text-4xl font-display font-bold tracking-tight text-foreground">
-          Welcome back, <span className="text-gold">{displayName}</span> 👋
+          Welcome back, <span className="text-gold">{displayName}</span>
         </h1>
         <p className="mt-2 text-sm text-muted-foreground/80 font-medium tracking-wide">
           CodeGraph <span className="text-gold">AI</span> · Phase 1 Visualization Engine
@@ -335,25 +335,6 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
           ))}
-
-          <Card className="border-dashed bg-muted/10 shadow-none border-muted-foreground/20">
-            <CardHeader className="pb-3">
-              <div className="flex items-center gap-2">
-                <div className="flex size-9 items-center justify-center rounded-lg border border-border bg-muted/50">
-                  <Terminal className="size-5 text-muted-foreground/60" />
-                </div>
-                <CardTitle className="text-base text-muted-foreground/80 font-medium">
-                  Server must be running
-                </CardTitle>
-              </div>
-              <CardDescription className="text-xs">
-                Start the backend:{' '}
-                <code className="rounded bg-muted px-1 py-0.5 font-mono text-[10px] text-foreground/70">
-                  cd server &amp;&amp; npm run dev
-                </code>
-              </CardDescription>
-            </CardHeader>
-          </Card>
         </div>
       </section>
 

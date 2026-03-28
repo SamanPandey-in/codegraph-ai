@@ -37,3 +37,5 @@ docker start codegraph-postgres
 docker stop codegraph-postgres
 ```
 
+## Create infrastructure/connections.js
+pg Pool + ioredis client, both exported as singletons
