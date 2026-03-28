@@ -1,0 +1,45 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: ankane/pgvector
+    container_name: codegraph-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: codegraph
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    container_name: codegraph-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  backend:
+    build: ./server
+    container_name: codegraph-backend
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/codegraph
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./server:/app
+      - /app/node_modules
+    command: sh -c "
+      until pg_isready -h postgres -p 5432; do sleep 1; done;
+      npm run migrate;
+      npm run dev
+      "
+
+volumes:
+  pgdata:
