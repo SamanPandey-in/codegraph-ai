@@ -51,3 +51,9 @@ Move _handleGitHub + _handleLocal into agent class; keep original file temporari
 
 ### Extract ScannerAgent from fileScanner.service.js - refactor
 Wrap scanFiles() in agent class; add monorepo detection + language breakdown
+
+### Extract ParserAgent from astParser.service.js + add worker thread - refactor
+Move parse logic to parseWorker.js (worker_threads); ParserAgent spawns pool; also add declarations extraction here
+
+### Extract GraphBuilderAgent from astParser.service.js - refactor
+buildDependencyGraph() becomes GraphBuilderAgent; add Tarjan cycle detection + in/out-degree
