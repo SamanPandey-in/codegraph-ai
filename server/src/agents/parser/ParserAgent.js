@@ -1,46 +1,9 @@
 import { Worker } from 'worker_threads';
 import os from 'os';
 import path from 'path';
-import { existsSync } from 'fs';
 import pLimit from 'p-limit';
 import { BaseAgent } from '../core/BaseAgent.js';
 import { scoreParser } from '../core/confidence.js';
-
-const RESOLVE_EXTS = ['.js', '.ts', '.jsx', '.tsx'];
-
-function inferFileType(relPath) {
-  const normalized = relPath.replace(/\\/g, '/').toLowerCase();
-  const segments = normalized.split('/');
-  const filename = segments[segments.length - 1] || '';
-
-  if (segments.some((s) => s === 'components' || s === 'component')) return 'component';
-  if (segments.some((s) => s === 'pages' || s === 'views' || s === 'screens')) return 'page';
-  if (segments.some((s) => s === 'hooks')) return 'hook';
-  if (segments.some((s) => s === 'services' || s === 'api' || s === 'apis')) return 'service';
-  if (segments.some((s) => s === 'utils' || s === 'helpers' || s === 'lib')) return 'util';
-  if (/config|\.conf\.|\.rc\./.test(filename)) return 'config';
-  return 'module';
-}
-
-function resolveToAbsolute(fromFile, specifier) {
-  if (!specifier.startsWith('.') && !specifier.startsWith('/')) return null;
-
-  const base = path.resolve(path.dirname(fromFile), specifier);
-
-  if (path.extname(base) && existsSync(base)) return base;
-
-  for (const ext of RESOLVE_EXTS) {
-    const candidate = base + ext;
-    if (existsSync(candidate)) return candidate;
-  }
-
-  for (const ext of RESOLVE_EXTS) {
-    const candidate = path.join(base, 'index' + ext);
-    if (existsSync(candidate)) return candidate;
-  }
-
-  return null;
-}
 
 function normalizeRelative(filePath, rootDir) {
   return path.relative(rootDir, filePath).replace(/\\/g, '/');
@@ -94,9 +57,6 @@ export class ParserAgent extends BaseAgent {
       ),
     );
 
-    const knownFiles = new Set(manifest.map((f) => normalizeRelative(f.absolutePath, rootDir)));
-    const graph = {};
-
     let successCount = 0;
     let failedCount = 0;
 
@@ -107,20 +67,6 @@ export class ParserAgent extends BaseAgent {
       } else {
         successCount += 1;
       }
-
-      const sourceAbs = path.join(rootDir, parsed.relativePath);
-      const deps = (parsed.imports || [])
-        .map((specifier) => resolveToAbsolute(sourceAbs, specifier))
-        .filter(Boolean)
-        .map((abs) => normalizeRelative(abs, rootDir))
-        .filter((rel) => knownFiles.has(rel));
-
-      graph[parsed.relativePath] = {
-        deps: [...new Set(deps)],
-        type: inferFileType(parsed.relativePath),
-        declarations: parsed.declarations || [],
-        metrics: parsed.metrics || {},
-      };
     }
 
     const summary = {
@@ -143,7 +89,7 @@ export class ParserAgent extends BaseAgent {
       jobId: context?.jobId,
       status,
       confidence,
-      data: { parsedFiles, summary, graph },
+      data: { parsedFiles, summary },
       errors,
       warnings,
       metrics: {
