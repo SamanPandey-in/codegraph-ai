@@ -45,3 +45,6 @@ server/src/agents/core/ — buildResult(), scoring formulas per agent
 
 ## Create AuditLogger + JobStatusEmitter
 AuditLogger writes to agent_audit_log; Emitter does Redis pub/sub for SSE
+
+## Extract IngestionAgent from analyze.service.js
+Move _handleGitHub + _handleLocal into agent class; keep original file temporarily
