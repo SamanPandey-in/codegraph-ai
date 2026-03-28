@@ -2,26 +2,31 @@ import React, { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import Header from './Header';
 import Sidebar from './Sidebar';
+import { cn } from '@/lib/utils';
 
-const Layout = () => {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-
-  const toggleSidebar = () => {
-    setSidebarOpen(!sidebarOpen);
-  };
+export default function Layout() {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   return (
-    <div className="min-h-screen bg-secondary-50">
+    <div className="min-h-screen bg-background">
       <Sidebar
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-        isCollapsed={sidebarCollapsed}
-        toggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+        isOpen={isSidebarOpen}
+        isCollapsed={isCollapsed}
+        onClose={() => setIsSidebarOpen(false)}
+        onToggleCollapse={() => setIsCollapsed((c) => !c)}
       />
 
-      <div className={`transition-all duration-300 ease-in-out ${sidebarCollapsed ? 'lg:pl-20' : 'lg:pl-64'}`}>
-        <Header toggleSidebar={toggleSidebar} sidebarOpen={sidebarOpen} />
+      <div
+        className={cn(
+          'transition-all duration-300 ease-in-out',
+          isCollapsed ? 'lg:pl-16' : 'lg:pl-60',
+        )}
+      >
+        <Header
+          isSidebarOpen={isSidebarOpen}
+          onSidebarToggle={() => setIsSidebarOpen((o) => !o)}
+        />
 
         <main className="p-4 sm:p-6 lg:p-8">
           <Outlet />
@@ -29,6 +34,4 @@ const Layout = () => {
       </div>
     </div>
   );
-};
-
-export default Layout;
+}

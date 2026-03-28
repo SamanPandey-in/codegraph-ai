@@ -1,40 +1,46 @@
 import jwt from 'jsonwebtoken';
 
-const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
 
-function buildAuthToken(user) {
+function signToken(user) {
   return jwt.sign(
     {
-      id: user.id,
+      id:       user.id,
       username: user.username,
-      email: user.email,
-      avatar: user.avatar,
-      role: user.role,
+      email:    user.email,
+      avatar:   user.avatar,
+      role:     user.role,
     },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' },
   );
 }
 
-export function handleGitHubCallback(req, res) {
-  if (!req.user) {
-    return res.redirect(`${clientUrl}/login`);
-  }
 
-  const token = buildAuthToken(req.user);
-
+function setTokenCookie(res, token) {
   res.cookie('token', token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure:   process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge: 7 * 24 * 60 * 60 * 1000,
+    maxAge:   7 * 24 * 60 * 60 * 1000,
   });
+}
 
-  return res.redirect(`${clientUrl}/home`);
+export function handleGitHubCallback(req, res) {
+  if (!req.user) {
+    return res.redirect(`${CLIENT_URL}/login?error=oauth_failed`);
+  }
+
+  const token = signToken(req.user);
+  setTokenCookie(res, token);
+
+  return res.redirect(`${CLIENT_URL}/dashboard`);
 }
 
 export function getCurrentUser(req, res) {
-  const token = req.cookies.token || req.headers.authorization?.replace('Bearer ', '');
+  const token =
+    req.cookies?.token ||
+    req.headers.authorization?.replace('Bearer ', '');
 
   if (!token) {
     return res.json({ data: null });
@@ -43,13 +49,13 @@ export function getCurrentUser(req, res) {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     return res.json({ data: decoded });
-  } catch (_error) {
+  } catch {
     res.clearCookie('token');
     return res.json({ data: null });
   }
 }
 
-export function logout(req, res) {
+export function logout(_req, res) {
   res.clearCookie('token');
-  return res.json({ message: 'Logged out' });
+  return res.json({ message: 'Logged out successfully.' });
 }

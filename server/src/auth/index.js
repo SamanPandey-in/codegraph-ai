@@ -1,4 +1,2 @@
-import authRouter from './routes/auth.routes.js';
-import { configureGitHubPassport } from './middlewares/passportGithub.middleware.js';
-
-export { authRouter, configureGitHubPassport };
+export { default as authRouter }             from './routes/auth.routes.js';
+export { configureGitHubPassport }           from './middleware/passport.middleware.js';

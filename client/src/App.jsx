@@ -1,117 +1,64 @@
-import React, { useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
-import ThemeProvider from './components/theme/ThemeProvider.jsx'
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
-// Layout
-import Layout from './components/layout/Layout';
+import { AuthProvider, useAuth }   from '@/features/auth';
+import { ThemeProvider }           from '@/features/theme';
 
-// Pages
-import { Landing, Login, Signup, Home } from './pages/index'
+import { PublicGuard, PrivateGuard } from '@/features/auth';
 
-// Features
-import { GraphPage } from './features/graph/index.js';
-import GraphHome from './features/graph/pages/Home.jsx';
+import Layout from '@/components/layout/Layout';
 
-// Protected Route Component
-const ProtectedRoute = ({ children }) => {
+import { LandingPage, LoginPage, SignupPage } from '@/features/auth';
+import { DashboardPage }                      from '@/features/dashboard';
+import { AnalyzePage }                        from '@/features/graph';
+
+function RootRedirect() {
   const { isAuthenticated, loading } = useAuth();
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-      </div>
-    );
-  }
-
-  return isAuthenticated ? children : <Navigate to="/login" replace />;
-};
-
-// Public Route Component (redirect to dashboard if already authenticated)
-const PublicRoute = ({ children }) => {
-  const { isAuthenticated, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-      </div>
-    );
-  }
-
-  return !isAuthenticated ? children : <Navigate to="/home" replace />;
-};
-
-// Graph Analysis Wrapper
-function GraphAnalyzer() {
-  const [graph, setGraph] = useState(null);
-
-  if (graph) {
-    return (
-      <GraphPage
-        graph={graph}
-        onReset={() => setGraph(null)}
-      />
-    );
-  }
+  if (loading) return null;
 
   return (
-    <GraphHome onGraphReady={setGraph} />
+    <Navigate
+      to={isAuthenticated ? '/dashboard' : '/landing'}
+      replace
+    />
   );
 }
 
 function AppRoutes() {
   return (
     <Routes>
-      {/* Public Routes */}
-      <Route path="/" element={<Landing />} />
-      <Route path="/analyze" element={<GraphAnalyzer />} />
-      <Route
-        path="/login"
-        element={
-          <PublicRoute>
-            <Login />
-          </PublicRoute>
-        }
-      />
-      <Route
-        path="/signup"
-        element={
-          <PublicRoute>
-            <Signup />
-          </PublicRoute>
-        }
-      />
+      <Route path="/" element={<RootRedirect />} />
 
-      {/* Protected Routes */}
-      <Route
-        element={
-          <ProtectedRoute>
-            <Layout />
-          </ProtectedRoute>
-        }
-      >
-        <Route path="/home" element={<Home />} />
-        <Route path="/dashboard" element={<Navigate to="/home" replace />} />
+      <Route element={<PublicGuard />}>
+        <Route path="/landing" element={<LandingPage />} />
+        <Route path="/login"   element={<LoginPage />} />
+        <Route path="/signup"  element={<SignupPage />} />
       </Route>
 
-      {/* Catch all */}
+      <Route element={<PrivateGuard />}>
+        <Route element={<Layout />}>
+          <Route path="/dashboard" element={<DashboardPage />} />
+        </Route>
+
+        <Route path="/analyze" element={<AnalyzePage />} />
+      </Route>
+
+      <Route path="/graph" element={<Navigate to="/analyze" replace />} />
+
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }
 
-function App() {
+export default function App() {
   return (
-    <Router>
+    <BrowserRouter>
       <AuthProvider>
         <ThemeProvider>
           <AppRoutes />
         </ThemeProvider>
       </AuthProvider>
-    </Router>
+    </BrowserRouter>
   );
 }
-
-export default App;

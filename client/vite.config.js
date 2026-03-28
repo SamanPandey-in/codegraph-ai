@@ -3,19 +3,20 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 
-// https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
+      // @/ maps to src/ — used throughout the codebase
       '@': path.resolve(__dirname, './src'),
     },
   },
   server: {
     proxy: {
-      '/analyze': 'http://localhost:5000',
-      '/api': 'http://localhost:5000',
-      '/health': 'http://localhost:5000',
+      // All API traffic (auth + analyze) proxied to the Express server.
+      // The old bare /analyze mount is gone — everything lives under /api now.
+      '/api':    { target: 'http://localhost:5000', changeOrigin: true },
+      '/health': { target: 'http://localhost:5000', changeOrigin: true },
     },
   },
 })
