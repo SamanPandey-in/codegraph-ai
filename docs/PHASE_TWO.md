@@ -57,3 +57,12 @@ Move parse logic to parseWorker.js (worker_threads); ParserAgent spawns pool; al
 
 ### Extract GraphBuilderAgent from astParser.service.js - refactor
 buildDependencyGraph() becomes GraphBuilderAgent; add Tarjan cycle detection + in/out-degree
+
+### Create PersistenceAgent - new
+Writes nodes + edges to Postgres using unnest() bulk insert; single transaction with savepoints
+
+### Create SupervisorAgent + BullMQ queue - new
+SupervisorAgent wires agents 1–4 + Persistence; queue/analysisQueue.js runs it as async worker
+
+### Update analyze route + add SSE jobs route - modify
+POST /api/analyze now enqueues job and returns {jobId}; GET /api/jobs/:id/stream emits SSE; GET /api/graph/:jobId loads from DB
