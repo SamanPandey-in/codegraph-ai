@@ -2,7 +2,7 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 
 const execFileAsync = promisify(execFile);
-const PICKER_TIMEOUT_MS = 120000;
+const PICKER_TIMEOUT_MS = 20000;
 
 function createError(message, statusCode = 500) {
   const err = new Error(message);
@@ -106,13 +106,23 @@ export async function getLocalPickerCapabilities() {
 async function pickWindowsDirectory() {
   const script = [
     'Add-Type -AssemblyName System.Windows.Forms',
+    '$owner = New-Object System.Windows.Forms.Form',
+    "$owner.Text = 'CodeGraph Folder Picker'",
+    '$owner.TopMost = $true',
+    '$owner.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen',
+    '$owner.ShowInTaskbar = $false',
+    '$owner.WindowState = [System.Windows.Forms.FormWindowState]::Minimized',
+    '$null = $owner.Show()',
+    '$owner.Activate()',
     '$dialog = New-Object System.Windows.Forms.FolderBrowserDialog',
     "$dialog.Description = 'Select a local repository folder'",
     '$dialog.ShowNewFolderButton = $false',
-    'if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {',
+    '$result = $dialog.ShowDialog($owner)',
+    '$owner.Close()',
+    'if ($result -eq [System.Windows.Forms.DialogResult]::OK) {',
     '  Write-Output $dialog.SelectedPath',
     '}',
-  ].join('; ');
+  ].join('\n');
 
   return runPickerCommand('powershell.exe', ['-NoProfile', '-STA', '-Command', script], {
     windowsHide: false,

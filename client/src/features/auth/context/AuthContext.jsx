@@ -69,7 +69,7 @@ export function AuthProvider({ children }) {
       window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
   }, []);
 
-  const loginWithGithub = () => authService.loginWithGithub();
+  const loginWithGithub = (pathOrUrl) => authService.loginWithGithub(pathOrUrl);
 
   const loginWithDemo = () => {
     if (!DEMO_AUTH_ENABLED) return;

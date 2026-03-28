@@ -1,14 +1,58 @@
 const GITHUB_API_BASE = 'https://api.github.com';
 
-function parseGitHubRateLimitError(response) {
+function getRequiredRepoScopes() {
+  const raw = process.env.GITHUB_REQUIRED_SCOPES || process.env.GITHUB_OAUTH_SCOPES || 'repo';
+  return raw
+    .split(',')
+    .map((scope) => scope.trim())
+    .filter(Boolean);
+}
+
+function parseScopesHeader(headerValue) {
+  if (!headerValue || typeof headerValue !== 'string') return [];
+
+  return headerValue
+    .split(',')
+    .map((scope) => scope.trim())
+    .filter(Boolean);
+}
+
+function hasRequiredScopes(grantedScopes, requiredScopes) {
+  if (!requiredScopes.length) return true;
+
+  const granted = new Set(grantedScopes);
+
+  return requiredScopes.every((required) => {
+    if (required === 'repo') {
+      return granted.has('repo');
+    }
+    return granted.has(required);
+  });
+}
+
+function extractNextLink(linkHeader) {
+  if (!linkHeader) return null;
+
+  const parts = linkHeader.split(',').map((part) => part.trim());
+  for (const part of parts) {
+    const match = part.match(/^<([^>]+)>;\s*rel="([^"]+)"$/);
+    if (match && match[2] === 'next') {
+      return match[1];
+    }
+  }
+
+  return null;
+}
+
+function parseGitHubRateLimitError(response, context = 'GitHub API request') {
   if (response.status === 401) {
-    const err = new Error('Failed authentication with GitHub. Please sign in again.');
+    const err = new Error('Failed authentication with GitHub. Please sign in again and retry.');
     err.statusCode = 401;
     throw err;
   }
 
   if (response.status === 403) {
-    const err = new Error('GitHub API rate limit reached or access forbidden. Please try again later.');
+    const err = new Error(`${context} was forbidden or rate-limited by GitHub. Retry later or re-authenticate with required permissions.`);
     err.statusCode = 403;
     throw err;
   }
@@ -19,13 +63,14 @@ function parseGitHubRateLimitError(response) {
     throw err;
   }
 
-  const err = new Error(`GitHub API request failed with status ${response.status}.`);
+  const err = new Error(`${context} failed with status ${response.status}.`);
   err.statusCode = response.status;
   throw err;
 }
 
-async function githubFetch(pathname, { token, headers = {} } = {}) {
-  const response = await fetch(`${GITHUB_API_BASE}${pathname}`, {
+async function githubFetchRaw(urlOrPath, { token, headers = {} } = {}) {
+  const targetUrl = urlOrPath.startsWith('http') ? urlOrPath : `${GITHUB_API_BASE}${urlOrPath}`;
+  return fetch(targetUrl, {
     headers: {
       Accept: 'application/vnd.github+json',
       'User-Agent': 'codegraph-ai',
@@ -33,12 +78,40 @@ async function githubFetch(pathname, { token, headers = {} } = {}) {
       ...headers,
     },
   });
+}
+
+async function githubFetch(pathname, options = {}) {
+  const response = await githubFetchRaw(pathname, options);
 
   if (!response.ok) {
-    parseGitHubRateLimitError(response);
+    parseGitHubRateLimitError(response, `GitHub API request (${pathname})`);
   }
 
   return response.json();
+}
+
+export async function getTokenScopeInfo({ token }) {
+  if (!token) {
+    const err = new Error('GitHub authentication required. Please log in with GitHub.');
+    err.statusCode = 401;
+    throw err;
+  }
+
+  const response = await githubFetchRaw('/user', { token });
+
+  if (!response.ok) {
+    parseGitHubRateLimitError(response, 'GitHub token scope validation');
+  }
+
+  const grantedScopes = parseScopesHeader(response.headers.get('x-oauth-scopes'));
+  const requiredScopes = getRequiredRepoScopes();
+  const ok = hasRequiredScopes(grantedScopes, requiredScopes);
+
+  return {
+    ok,
+    grantedScopes,
+    requiredScopes,
+  };
 }
 
 export function parseGitHubRepoUrl(repoUrl) {
@@ -111,11 +184,38 @@ export async function fetchOwnedRepositories({ token }) {
     throw err;
   }
 
-  const data = await githubFetch('/user/repos?affiliation=owner&sort=updated&per_page=100', {
-    token,
-  });
+  const scopeInfo = await getTokenScopeInfo({ token });
+  if (!scopeInfo.ok) {
+    const err = new Error(
+      `Insufficient GitHub permissions. Required scopes: ${scopeInfo.requiredScopes.join(', ')}. Re-authenticate and grant access.`,
+    );
+    err.statusCode = 403;
+    err.code = 'INSUFFICIENT_SCOPE';
+    err.requiredScopes = scopeInfo.requiredScopes;
+    err.grantedScopes = scopeInfo.grantedScopes;
+    throw err;
+  }
 
-  return data.map((repo) => ({
+  let nextUrl = `${GITHUB_API_BASE}/user/repos?visibility=all&affiliation=owner,collaborator,organization_member&sort=updated&per_page=100`;
+  const allRepos = [];
+
+  while (nextUrl) {
+    const response = await githubFetchRaw(nextUrl, { token });
+
+    if (!response.ok) {
+      parseGitHubRateLimitError(response, 'GitHub repository listing');
+    }
+
+    const pageRepos = await response.json();
+    if (Array.isArray(pageRepos)) {
+      allRepos.push(...pageRepos);
+    }
+
+    const linkHeader = response.headers.get('link');
+    nextUrl = extractNextLink(linkHeader);
+  }
+
+  const mapped = allRepos.map((repo) => ({
     id: repo.id,
     name: repo.name,
     fullName: repo.full_name,
@@ -124,6 +224,14 @@ export async function fetchOwnedRepositories({ token }) {
     private: Boolean(repo.private),
     htmlUrl: repo.html_url,
   }));
+
+  return {
+    repositories: mapped,
+    scopes: {
+      required: scopeInfo.requiredScopes,
+      granted: scopeInfo.grantedScopes,
+    },
+  };
 }
 
 export async function resolvePublicRepository(repoUrl) {

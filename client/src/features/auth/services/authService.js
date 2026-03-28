@@ -6,6 +6,8 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL
   ? `${import.meta.env.VITE_API_BASE_URL}/api`
   : 'http://localhost:5000/api';
 
+const API_ORIGIN = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+
 const apiClient = axios.create({
   baseURL: BASE_URL,
   withCredentials: true,
@@ -24,7 +26,22 @@ apiClient.interceptors.response.use(
 );
 
 export const authService = {
-  loginWithGithub() {
+  loginWithGithub(pathOrUrl = '/auth/github') {
+    if (/^https?:\/\//i.test(pathOrUrl)) {
+      window.location.href = pathOrUrl;
+      return;
+    }
+
+    if (pathOrUrl.startsWith('/api/')) {
+      window.location.href = `${API_ORIGIN}${pathOrUrl}`;
+      return;
+    }
+
+    if (pathOrUrl.startsWith('/')) {
+      window.location.href = `${BASE_URL}${pathOrUrl}`;
+      return;
+    }
+
     window.location.href = `${BASE_URL}/auth/github`;
   },
 

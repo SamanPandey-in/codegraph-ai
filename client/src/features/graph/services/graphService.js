@@ -26,7 +26,7 @@ export const graphService = {
 
   browseLocalPath: async () => {
     const { data } = await graphClient.get('/api/analyze/local/browse', {
-      timeout: 125000,
+      timeout: 22000,
     });
     return data;
   },

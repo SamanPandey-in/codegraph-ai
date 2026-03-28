@@ -61,15 +61,32 @@ export async function resolvePublicRepoController(req, res, next) {
 
 export async function listOwnedReposController(req, res, next) {
   try {
-    const repos = await fetchOwnedRepositories({ token: req.cookies?.github_token });
-    return res.status(200).json({ repositories: repos });
+    const result = await fetchOwnedRepositories({ token: req.cookies?.github_token });
+    return res.status(200).json({
+      repositories: result.repositories,
+      scopes: result.scopes,
+    });
   } catch (err) {
     if (err.statusCode === 401) {
       return res.status(401).json({
         error: err.message,
-        loginUrl: '/api/auth/github',
+        loginUrl: '/api/auth/github?reauth=1',
+        action:
+          'Re-authenticate with GitHub. If this persists, revoke this app in GitHub Settings > Applications, then connect again.',
       });
     }
+
+    if (err.statusCode === 403 && err.code === 'INSUFFICIENT_SCOPE') {
+      return res.status(403).json({
+        error: err.message,
+        requiredScopes: err.requiredScopes,
+        grantedScopes: err.grantedScopes,
+        loginUrl: '/api/auth/github?reauth=1',
+        action:
+          'Grant the required scopes. If GitHub does not prompt for new scopes, revoke the app authorization in GitHub Settings > Applications and reconnect.',
+      });
+    }
+
     return next(err);
   }
 }

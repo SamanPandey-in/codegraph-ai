@@ -18,9 +18,25 @@ import { analyzeCodebase, selectGraphStatus } from '../slices/graphSlice';
 function toErrorMessage(err, fallback) {
   const message = err?.response?.data?.error || err?.message || fallback;
   const missing = err?.response?.data?.missing;
+  const requiredScopes = err?.response?.data?.requiredScopes;
+  const grantedScopes = err?.response?.data?.grantedScopes;
+  const action = err?.response?.data?.action;
 
   if (Array.isArray(missing) && missing.length > 0) {
     return `${message} Missing: ${missing.join(', ')}`;
+  }
+
+  if (Array.isArray(requiredScopes) && requiredScopes.length > 0) {
+    const granted = Array.isArray(grantedScopes) && grantedScopes.length > 0
+      ? grantedScopes.join(', ')
+      : 'none';
+
+    const actionLine = action ? ` ${action}` : '';
+    return `${message} Required scopes: ${requiredScopes.join(', ')}. Granted scopes: ${granted}.${actionLine}`;
+  }
+
+  if (action) {
+    return `${message} ${action}`;
   }
 
   return message;
@@ -119,6 +135,7 @@ export default function AnalyzeForm() {
   const [repoQuery, setRepoQuery] = useState('');
   const [hasLoadedOwnedRepos, setHasLoadedOwnedRepos] = useState(false);
   const [ownedAuthRequired, setOwnedAuthRequired] = useState(false);
+  const [ownedLoginUrl, setOwnedLoginUrl] = useState('/auth/github');
   const [selectedOwnedRepo, setSelectedOwnedRepo] = useState(null);
   const [ownedBranchesLoading, setOwnedBranchesLoading] = useState(false);
   const [ownedBranchesError, setOwnedBranchesError] = useState('');
@@ -250,14 +267,20 @@ export default function AnalyzeForm() {
       setOwnedRepos(repositories);
       setHasLoadedOwnedRepos(true);
       setOwnedAuthRequired(false);
+      setOwnedLoginUrl('/auth/github');
 
       if (repositories.length === 0) {
         setOwnedReposError('No repositories found in your GitHub account.');
       }
     } catch (err) {
       const authRequired = err?.response?.status === 401;
+      const scopeRequired = err?.response?.status === 403;
+      const loginUrl = err?.response?.data?.loginUrl;
       setOwnedRepos([]);
-      setOwnedAuthRequired(authRequired);
+      setOwnedAuthRequired(authRequired || scopeRequired);
+      if (typeof loginUrl === 'string' && loginUrl.trim()) {
+        setOwnedLoginUrl(loginUrl.trim());
+      }
       setOwnedReposError(
         toErrorMessage(
           err,
@@ -447,7 +470,7 @@ export default function AnalyzeForm() {
 
       setLocalError(
         timedOut
-          ? 'Folder picker timed out. Please click Browse again or paste the absolute path manually.'
+          ? 'Folder picker did not open in time. Please try Browse again. If it still fails, paste an absolute path manually.'
           : toErrorMessage(
               err,
               'Could not open native folder picker. Please paste the absolute path manually.',
@@ -681,7 +704,7 @@ export default function AnalyzeForm() {
                 {(!isAuthenticated || ownedAuthRequired) && (
                   <div className="rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground flex items-center justify-between gap-2">
                     <span>GitHub authentication required. Please log in with GitHub.</span>
-                    <Button type="button" variant="outline" onClick={loginWithGithub}>
+                    <Button type="button" variant="outline" onClick={() => loginWithGithub(ownedLoginUrl)}>
                       <Github />
                       Connect GitHub
                     </Button>
