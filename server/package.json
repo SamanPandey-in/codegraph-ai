@@ -8,22 +8,29 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "migrate": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/001_initial.sql || true",
+    "db:migrate": "npm run migrate"
   },
   "dependencies": {
     "@babel/parser": "^7.23.6",
     "adm-zip": "^0.5.16",
     "bcrypt": "^6.0.0",
+    "bullmq": "^5.71.1",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "express-rate-limit": "^7.1.5",
+    "ioredis": "^5.10.1",
     "jsonwebtoken": "^9.0.3",
+    "openai": "^6.33.0",
     "p-limit": "^5.0.0",
     "passport": "^0.7.0",
     "passport-github2": "^0.1.12",
-    "passport-jwt": "^4.0.1"
+    "passport-jwt": "^4.0.1",
+    "pg": "^8.20.0",
+    "pgvector": "^0.2.1"
   },
   "devDependencies": {
     "eslint": "^9.39.2",
