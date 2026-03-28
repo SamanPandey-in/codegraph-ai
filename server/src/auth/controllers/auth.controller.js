@@ -31,6 +31,10 @@ export function handleGitHubCallback(req, res) {
     return res.redirect(`${CLIENT_URL}/login?error=oauth_failed`);
   }
 
+  if (!process.env.JWT_SECRET) {
+    return res.redirect(`${CLIENT_URL}/login?error=server_config`);
+  }
+
   const token = signToken(req.user);
   setTokenCookie(res, token);
 

@@ -39,12 +39,12 @@ export function createGitHubStrategy() {
   );
 }
 
-export function validateGitHubOAuthEnv() {
+export function validateGitHubOAuthEnv({ requireJwtSecret = true } = {}) {
   const missing = [];
 
   if (!process.env.GITHUB_CLIENT_ID) missing.push('GITHUB_CLIENT_ID');
   if (!process.env.GITHUB_CLIENT_SECRET) missing.push('GITHUB_CLIENT_SECRET');
-  if (!process.env.JWT_SECRET) missing.push('JWT_SECRET');
+  if (requireJwtSecret && !process.env.JWT_SECRET) missing.push('JWT_SECRET');
 
   return {
     valid: missing.length === 0,
