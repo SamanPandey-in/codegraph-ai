@@ -115,20 +115,23 @@ const formatDate = (value) => {
   }).format(parsed);
 };
 
-function MetricCard({ icon, title, value, helper }) {
+function MetricCard({ icon, title, value, helper, index = 0 }) {
   return (
-    <Card className="shadow-sm hover:shadow-md transition-shadow">
-      <CardHeader className="pb-2">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span className="flex size-8 items-center justify-center rounded-lg border border-border bg-muted/50">
+    <Card 
+      className="shadow-neu-inset border-none bg-background/60 rounded-2xl animate-in fade-in zoom-in-95 duration-700 fill-mode-both"
+      style={{ animationDelay: `${200 + index * 100}ms` }}
+    >
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-3 text-xs uppercase tracking-widest font-bold text-muted-foreground/70">
+          <div className="flex size-9 items-center justify-center rounded-xl bg-background shadow-sm border border-border/20">
             {icon}
-          </span>
-          <span className="font-medium">{title}</span>
+          </div>
+          <span>{title}</span>
         </div>
       </CardHeader>
-      <CardContent>
-        <p className="text-2xl font-bold tracking-tight text-foreground">{value}</p>
-        <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground/80">{helper}</p>
+      <CardContent className="pt-0">
+        <p className="text-3xl font-display font-bold tracking-tight text-foreground">{value}</p>
+        <p className="mt-2 text-[10px] uppercase font-bold tracking-wider text-muted-foreground/50">{helper}</p>
       </CardContent>
     </Card>
   );
@@ -292,37 +295,41 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="flex flex-col gap-8">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">
-          Welcome back, {displayName} 👋
+    <div className="flex flex-col gap-10 py-6">
+      <div className="animate-in fade-in slide-in-from-top-4 duration-700">
+        <h1 className="text-4xl font-display font-bold tracking-tight text-foreground">
+          Welcome back, <span className="text-gold">{displayName}</span> 👋
         </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          CodeGraph AI · Phase 1 — Parsing &amp; Graph Visualization
+        <p className="mt-2 text-sm text-muted-foreground/80 font-medium tracking-wide">
+          CodeGraph <span className="text-gold">AI</span> · Phase 1 Visualization Engine
         </p>
       </div>
 
-      <section>
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+      <section className="animate-in fade-in slide-in-from-bottom-4 duration-700 delay-150">
+        <h2 className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.2em] mb-4 opacity-70">
           Quick actions
         </h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {QUICK_ACTIONS.map((action) => (
-            <Card key={action.title} className="group shadow-sm hover:shadow-md hover:border-gold/30 transition-all duration-300">
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="flex size-9 items-center justify-center rounded-lg border border-border bg-muted/50 group-hover:bg-gold/5 transition-colors">
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {QUICK_ACTIONS.map((action, idx) => (
+            <Card 
+              key={action.title} 
+              className="group rounded-2xl shadow-neu-inset border-none bg-background/40 hover:bg-background/60 transition-all duration-500 animate-in fade-in slide-in-from-bottom-4 fill-mode-both"
+              style={{ animationDelay: `${300 + idx * 100}ms` }}
+            >
+              <CardHeader className="pb-4">
+                <div className="flex items-center gap-4">
+                  <div className="flex size-10 items-center justify-center rounded-xl bg-gold/10 shadow-sm border border-gold/20 group-hover:scale-110 transition-transform duration-300">
                     {action.icon}
                   </div>
-                  <CardTitle className="text-base font-bold">{action.title}</CardTitle>
+                  <CardTitle className="text-base font-display font-bold tracking-tight">{action.title}</CardTitle>
                 </div>
-                <CardDescription className="text-xs leading-relaxed">{action.description}</CardDescription>
+                <CardDescription className="text-xs leading-relaxed opacity-70 mt-1">{action.description}</CardDescription>
               </CardHeader>
               <CardContent>
                 <Link to={action.href}>
-                  <Button size="sm" className="gap-1.5 w-full sm:w-auto bg-gold text-white hover:bg-gold/90 shadow-sm">
+                  <Button size="sm" className="gap-2 w-full sm:w-auto bg-gold text-white hover:bg-gold/90 shadow-md rounded-xl font-bold tracking-wide transition-all group-hover:translate-y-[-2px]">
                     {action.cta}
-                    <ArrowRight className="size-3.5" />
+                    <ArrowRight className="size-4 group-hover:translate-x-1 transition-transform" />
                   </Button>
                 </Link>
               </CardContent>
@@ -369,14 +376,15 @@ export default function DashboardPage() {
           </Button>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {stats.map((item) => (
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {stats.map((item, idx) => (
             <MetricCard
               key={item.key}
               icon={item.icon}
               title={item.title}
               value={item.value}
               helper={item.helper}
+              index={idx}
             />
           ))}
         </div>
@@ -507,39 +515,45 @@ export default function DashboardPage() {
           {!isLoadingFirstTime && !error?.message && visibleRepositories.length > 0 ? (
             <div className="grid gap-3">
               {visibleRepositories.map((repo) => (
-                <Card key={repo.id} className="shadow-sm hover:shadow-md transition-all border-border/60 hover:border-border">
-                  <CardContent className="flex flex-col gap-3 py-4">
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div>
-                        <h3 className="text-sm font-bold text-foreground hover:text-gold transition-colors cursor-pointer">
+                <Card 
+                  key={repo.id} 
+                  className="rounded-2xl shadow-neu-inset border-none bg-background/40 transition-all duration-300 animate-in fade-in slide-in-from-right-4 fill-mode-both"
+                  style={{ animationDelay: `${400 + repositories.indexOf(repo) * 50}ms` }}
+                >
+                  <CardContent className="flex flex-col gap-4 py-6">
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div className="space-y-1">
+                        <h3 className="text-base font-display font-bold text-foreground hover:text-gold transition-colors cursor-pointer tracking-tight">
                           {repo.fullName || `${repo.owner}/${repo.name}`}
                         </h3>
-                        <p className="text-[11px] text-muted-foreground/80 mt-0.5">
-                          Source: <span className="text-foreground/70">{repo.source}</span> · Branch: <span className="text-foreground/70">{repo.branch || 'unknown'}</span>
+                        <p className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground/60">
+                          {repo.source} <span className="mx-1 opacity-30">|</span> {repo.branch || 'unknown'}
                         </p>
                       </div>
-                      <span className="rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+                      <span className="rounded-xl border border-border/20 bg-background/50 px-3 py-1 text-[9px] font-black uppercase tracking-[0.15em] text-muted-foreground shadow-sm">
                         {repo.status}
                       </span>
                     </div>
 
-                    <div className="grid gap-2 text-[11px] text-muted-foreground sm:grid-cols-2 lg:grid-cols-4">
-                      <p>
-                        <span className="font-semibold text-foreground/80">Analyzed:</span>{' '}
-                        {formatDate(repo.analyzedAt)}
-                      </p>
-                      <p>
-                        <span className="font-semibold text-foreground/80">Nodes:</span>{' '}
-                        {repo.nodeCount ?? '-'}
-                      </p>
-                      <p>
-                        <span className="font-semibold text-foreground/80">Edges:</span>{' '}
-                        {repo.edgeCount ?? '-'}
-                      </p>
-                      <p className="truncate" title={repo.commitSha || ''}>
-                        <span className="font-semibold text-foreground/80">Commit:</span>{' '}
-                        {repo.commitSha ? repo.commitSha.slice(0, 12) : '-'}
-                      </p>
+                    <div className="grid gap-4 text-[11px] text-muted-foreground/80 sm:grid-cols-2 lg:grid-cols-4 pt-2 border-t border-border/10">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[9px] uppercase font-bold tracking-tighter opacity-40">Analyzed</span>
+                        <span className="font-semibold text-foreground/70">{formatDate(repo.analyzedAt)}</span>
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[9px] uppercase font-bold tracking-tighter opacity-40">Nodes</span>
+                        <span className="font-semibold text-foreground/70">{repo.nodeCount ?? '-'}</span>
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[9px] uppercase font-bold tracking-tighter opacity-40">Edges</span>
+                        <span className="font-semibold text-foreground/70">{repo.edgeCount ?? '-'}</span>
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[9px] uppercase font-bold tracking-tighter opacity-40">Commit</span>
+                        <span className="font-semibold text-foreground/70 truncate" title={repo.commitSha || ''}>
+                          {repo.commitSha ? repo.commitSha.slice(0, 12) : '-'}
+                        </span>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -553,29 +567,37 @@ export default function DashboardPage() {
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
           Roadmap
         </h2>
-        <div className="grid gap-4 sm:grid-cols-3">
-          {PHASE_ROADMAP.map(({ phase, label, status, items }) => (
-            <Card key={phase}>
-              <CardHeader className="pb-2">
+        <div className="grid gap-6 sm:grid-cols-3">
+          {PHASE_ROADMAP.map(({ phase, label, status, items }, idx) => (
+            <Card 
+              key={phase} 
+              className="rounded-2xl shadow-neu-inset border-none bg-background/40 transition-all duration-500 animate-in fade-in slide-in-from-bottom-4 fill-mode-both"
+              style={{ animationDelay: `${500 + idx * 100}ms` }}
+            >
+              <CardHeader className="pb-4">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm font-semibold">{phase}</CardTitle>
+                  <CardTitle className="text-xs font-bold uppercase tracking-wider opacity-60">{phase}</CardTitle>
                   <span
-                    className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${STATUS_STYLES[status]}`}
+                    className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-widest ${STATUS_STYLES[status]}`}
                   >
                     {label}
                   </span>
                 </div>
               </CardHeader>
               <CardContent>
-                <ul className="flex flex-col gap-1.5">
+                <ul className="flex flex-col gap-3">
                   {items.map((item) => (
-                    <li key={item} className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <li key={item} className="flex items-center gap-3 text-xs font-medium text-foreground/70 group/item">
                       {status === 'active' ? (
-                        <GitBranch className="size-3.5 text-green-400 shrink-0" />
+                        <div className="flex size-5 items-center justify-center rounded-full bg-green-500/10 border border-green-500/20 shadow-sm">
+                          <GitBranch className="size-2.5 text-green-500" />
+                        </div>
                       ) : (
-                        <Zap className="size-3.5 text-muted-foreground/40 shrink-0" />
+                        <div className="flex size-5 items-center justify-center rounded-full bg-muted/50 border border-border/20 shadow-sm">
+                          <Zap className="size-2.5 text-muted-foreground/40" />
+                        </div>
                       )}
-                      {item}
+                      <span className="group-hover/item:text-gold transition-colors">{item}</span>
                     </li>
                   ))}
                 </ul>

@@ -1,45 +1,48 @@
 @import url('https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Space+Grotesk:wght@300..700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Sora:wght@300;400;500;600;700&display=swap');
 @import "tailwindcss";
+
 
 @layer base {
   :root {
-    --background: 249 250 251;     /* #F9FAFB */
-    --foreground: 17 24 39;        /* #111827 - Darker Gray/Black */
-    --card: 255 255 255;
-    --card-foreground: 17 24 39;
+    /* Refined for Neumorphism - subtle mid-tones */
+    --background: 240 242 245;     /* #F0F2F5 */
+    --foreground: 30 41 59;        /* #1E293B */
+    --card: 240 242 245;           /* Same as background for neumorphism */
+    --card-foreground: 30 41 59;
     --popover: 255 255 255;
-    --popover-foreground: 17 24 39;
-    --primary: 212 175 55;         /* Premium Gold #D4AF37 */
+    --popover-foreground: 30 41 59;
+    --primary: 212 175 55;
     --primary-foreground: 255 255 255;
-    --secondary: 107 114 128;      /* Slate Gray */
-    --secondary-foreground: 249 250 251;
-    --muted: 243 244 246;          /* #F3F4F6 */
-    --muted-foreground: 107 114 128;
+    --secondary: 100 116 139;
+    --secondary-foreground: 248 250 252;
+    --muted: 226 232 240;          /* #E2E8F0 */
+    --muted-foreground: 100 116 139;
     --accent: 212 175 55;
-    --accent-foreground: 17 24 39;
-    --border: 229 231 235;         /* Solid gray border */
-    --input: 255 255 255;
+    --accent-foreground: 30 41 59;
+    --border: 210 214 220;
+    --input: 240 242 245;
     --ring: 212 175 55;
-    --radius: 0.75rem;             /* Slightly rounder for modern feel */
+    --radius: 1rem;                /* Rounder for neumorphism */
   }
 
   .dark {
-    --background: 3 7 18;          /* Very deep black #030712 */
-    --foreground: 249 250 251;     /* #F9FAFB */
-    --card: 17 24 39;              /* #111827 */
-    --card-foreground: 249 250 251;
-    --popover: 17 24 39;
-    --popover-foreground: 249 250 251;
-    --primary: 212 175 55;         /* Gold */
-    --primary-foreground: 3 7 18;
-    --secondary: 75 85 99;
-    --secondary-foreground: 249 250 251;
-    --muted: 31 41 55;             /* #1F2937 */
-    --muted-foreground: 156 163 175;
+    --background: 15 15 15;        /* Deep Black */
+    --foreground: 241 245 249;
+    --card: 15 15 15;
+    --card-foreground: 241 245 249;
+    --popover: 26 26 26;
+    --popover-foreground: 241 245 249;
+    --primary: 212 175 55;
+    --primary-foreground: 15 15 15;
+    --secondary: 71 85 105;
+    --secondary-foreground: 241 245 249;
+    --muted: 38 38 38;
+    --muted-foreground: 148 163 184;
     --accent: 212 175 55;
-    --accent-foreground: 3 7 18;
-    --border: 31 41 55;
-    --input: 17 24 39;
+    --accent-foreground: 15 15 15;
+    --border: 38 38 38;
+    --input: 15 15 15;
     --ring: 212 175 55;
   }
 }
@@ -47,38 +50,21 @@
 @theme {
   --color-background: rgb(var(--background));
   --color-foreground: rgb(var(--foreground));
-
   --color-card: rgb(var(--card));
   --color-card-foreground: rgb(var(--card-foreground));
-
-  --color-popover: rgb(var(--popover));
-  --color-popover-foreground: rgb(var(--popover-foreground));
-
   --color-primary: rgb(var(--primary));
   --color-primary-foreground: rgb(var(--primary-foreground));
-
-  --color-secondary: rgb(var(--secondary));
-  --color-secondary-foreground: rgb(var(--secondary-foreground));
-
   --color-muted: rgb(var(--muted));
   --color-muted-foreground: rgb(var(--muted-foreground));
-
-  --color-accent: rgb(var(--accent));
-  --color-accent-foreground: rgb(var(--accent-foreground));
-
   --color-border: rgb(var(--border));
-  --color-input: rgb(var(--input));
-  --color-ring: rgb(var(--ring));
-
-  --color-gold: #FFC107;
-  --color-black: #0B0B0B;
-  --color-dark: #2E2E2E;
-  --color-gray: #666666;
-  --color-light: #E5E5E5;
-
-  --font-sans: 'Geist', system-ui, -apple-system, sans-serif;
-  --font-display: 'Space Grotesk', 'Geist', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+  --color-gold: #D4AF37;
+  
+  --font-sans: 'Outfit', sans-serif;
+  --font-display: 'Sora', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;
 }
 
 @layer base {
@@ -90,13 +76,45 @@
     color: rgb(var(--foreground));
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: -0.01em;
+    position: relative;
+  }
+
+  /* Noise Overlay */
+  body::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    opacity: 0.03;
+    z-index: 100;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
   }
 }
 
 @layer utilities {
-  .shadow-premium {
-    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+  .shadow-neu-inset {
+    box-shadow: inset 4px 4px 8px rgba(0, 0, 0, 0.05), inset -4px -4px 8px rgba(255, 255, 255, 0.8);
+  }
+  .dark .shadow-neu-inset {
+    box-shadow: inset 4px 4px 8px rgba(0, 0, 0, 0.4), inset -2px -2px 4px rgba(255, 255, 255, 0.05);
+  }
+  
+  .glass-premium {
+    background: rgba(var(--background) / 0.6);
+    backdrop-filter: blur(12px) saturate(180%);
+    -webkit-backdrop-filter: blur(12px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+  }
+  
+  .text-gradient-gold {
+    background: linear-gradient(135deg, #D4AF37 0%, #F1D382 50%, #D4AF37 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
   }
 }
 
