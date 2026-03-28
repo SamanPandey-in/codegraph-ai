@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   Network,
@@ -90,6 +90,21 @@ const SOURCE_FILTER_OPTIONS = [
   { value: 'local', label: 'Local repos analyzed' },
 ];
 
+const DEFAULT_SORT = 'recent';
+const DEFAULT_SOURCE_FILTER = 'all';
+
+const parseSortFromQuery = (value) => {
+  return SORT_OPTIONS.some((option) => option.value === value)
+    ? value
+    : DEFAULT_SORT;
+};
+
+const parseSourceFromQuery = (value) => {
+  return SOURCE_FILTER_OPTIONS.some((option) => option.value === value)
+    ? value
+    : DEFAULT_SOURCE_FILTER;
+};
+
 const formatDate = (value) => {
   if (!value) return 'Unknown';
   const parsed = new Date(value);
@@ -137,11 +152,16 @@ function RepositoryListSkeleton() {
 }
 
 export default function DashboardPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const dispatch = useDispatch();
   const { user } = useAuth();
-  const [sortBy, setSortBy] = useState('recent');
-  const [sourceFilter, setSourceFilter] = useState('all');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState(() =>
+    parseSortFromQuery(searchParams.get('sort')),
+  );
+  const [sourceFilter, setSourceFilter] = useState(() =>
+    parseSourceFromQuery(searchParams.get('source')),
+  );
+  const [searchTerm, setSearchTerm] = useState(() => searchParams.get('q') || '');
 
   const status = useSelector(selectDashboardStatus);
   const error = useSelector(selectDashboardError);
@@ -161,6 +181,25 @@ export default function DashboardPage() {
       }),
     );
   }, [dispatch, user?.id]);
+
+  useEffect(() => {
+    const nextParams = new URLSearchParams();
+
+    if (sortBy !== DEFAULT_SORT) {
+      nextParams.set('sort', sortBy);
+    }
+
+    if (sourceFilter !== DEFAULT_SOURCE_FILTER) {
+      nextParams.set('source', sourceFilter);
+    }
+
+    const trimmed = searchTerm.trim();
+    if (trimmed) {
+      nextParams.set('q', trimmed);
+    }
+
+    setSearchParams(nextParams, { replace: true });
+  }, [searchTerm, setSearchParams, sortBy, sourceFilter]);
 
   const stats = useMemo(
     () => [
@@ -236,9 +275,20 @@ export default function DashboardPage() {
     });
   }, [repositories, searchTerm, sortBy, sourceFilter]);
 
+  const hasActiveFilters =
+    sortBy !== DEFAULT_SORT ||
+    sourceFilter !== DEFAULT_SOURCE_FILTER ||
+    searchTerm.trim().length > 0;
+
   const refreshHistory = () => {
     if (!user?.id) return;
     dispatch(fetchAnalyzedRepositories({ userId: user.id, page: 1, limit: 50 }));
+  };
+
+  const clearFilters = () => {
+    setSortBy(DEFAULT_SORT);
+    setSourceFilter(DEFAULT_SOURCE_FILTER);
+    setSearchTerm('');
   };
 
   return (
@@ -380,6 +430,20 @@ export default function DashboardPage() {
               <p className="text-xs text-muted-foreground">
                 Showing {visibleRepositories.length} of {repositories.length} analyzed repositories.
               </p>
+
+              {hasActiveFilters ? (
+                <div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearFilters}
+                    className="h-7 px-2 text-xs"
+                  >
+                    Clear filters
+                  </Button>
+                </div>
+              ) : null}
             </CardContent>
           </Card>
 
