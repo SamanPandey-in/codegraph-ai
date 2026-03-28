@@ -1,9 +1,3 @@
-/**
- * index.js — Process entry point.
- *
- * Configures dotenv exactly ONCE before any other module is imported,
- * then starts the HTTP server.
- */
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';

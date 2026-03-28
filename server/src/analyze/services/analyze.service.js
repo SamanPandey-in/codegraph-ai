@@ -1,7 +1,14 @@
-import { stat } from 'fs/promises';
+import { stat, access, mkdtemp, rm, readdir, writeFile } from 'fs/promises';
 import path from 'path';
+import os from 'os';
+import AdmZip from 'adm-zip';
 import { scanFiles } from './fileScanner.service.js';
 import { buildDependencyGraph } from './astParser.service.js';
+import {
+  fetchRepoBranches,
+  fetchRepoDetails,
+  parseGitHubRepoUrl,
+} from './githubApi.service.js';
 
 const BLOCKED_PREFIXES = [
   '/etc',
@@ -39,7 +46,23 @@ function validatePath(resolved) {
   return null;
 }
 
-export async function analyzeProject(projectPath) {
+async function hasRepositoryMarkers(rootDir) {
+  const markerChecks = [
+    access(path.join(rootDir, '.git')).then(() => true).catch(() => false),
+    access(path.join(rootDir, 'package.json')).then(() => true).catch(() => false),
+    access(path.join(rootDir, 'pyproject.toml')).then(() => true).catch(() => false),
+    access(path.join(rootDir, 'go.mod')).then(() => true).catch(() => false),
+    access(path.join(rootDir, 'pom.xml')).then(() => true).catch(() => false),
+    access(path.join(rootDir, 'src')).then(() => true).catch(() => false),
+    access(path.join(rootDir, 'app')).then(() => true).catch(() => false),
+    access(path.join(rootDir, 'lib')).then(() => true).catch(() => false),
+  ];
+
+  const checks = await Promise.all(markerChecks);
+  return checks.some(Boolean);
+}
+
+async function validateLocalRepositoryPath(projectPath) {
   const rootDir = path.resolve(projectPath);
 
   const securityError = validatePath(rootDir);
@@ -63,22 +86,177 @@ export async function analyzeProject(projectPath) {
     throw err;
   }
 
+  const looksLikeRepo = await hasRepositoryMarkers(rootDir);
+  if (!looksLikeRepo) {
+    const err = new Error(
+      'Path does not look like a repository. Expected a .git folder or project markers like package.json/src.',
+    );
+    err.statusCode = 400;
+    throw err;
+  }
+
+  return rootDir;
+}
+
+function normalizeBranchList(branches, defaultBranch) {
+  const names = branches.map((b) => b.name);
+  if (defaultBranch && !names.includes(defaultBranch)) {
+    return [{ name: defaultBranch, protected: false }, ...branches];
+  }
+  return branches;
+}
+
+async function downloadGitHubRepositoryArchive({ owner, repo, branch, token }) {
+  const archiveUrl = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/zipball/${encodeURIComponent(branch)}`;
+  const response = await fetch(archiveUrl, {
+    headers: {
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'codegraph-ai',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      const err = new Error('Failed authentication with GitHub. Please sign in again.');
+      err.statusCode = 401;
+      throw err;
+    }
+    if (response.status === 404) {
+      const err = new Error('Repository or branch not found on GitHub.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const err = new Error(`Unable to download repository archive (status ${response.status}).`);
+    err.statusCode = response.status;
+    throw err;
+  }
+
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'codegraph-github-'));
+  const zipPath = path.join(tempRoot, 'repo.zip');
+  const extractRoot = path.join(tempRoot, 'repo');
+
+  await writeFile(zipPath, Buffer.from(await response.arrayBuffer()));
+
+  const zip = new AdmZip(zipPath);
+  zip.extractAllTo(extractRoot, true);
+
+  const entries = await readdir(extractRoot, { withFileTypes: true });
+  const firstEntry = entries.find((entry) => entry.isDirectory());
+  if (!firstEntry) {
+    const err = new Error('Could not extract GitHub repository archive.');
+    err.statusCode = 500;
+    throw err;
+  }
+
+  return {
+    tempRoot,
+    extractedRepoPath: path.join(extractRoot, firstEntry.name),
+  };
+}
+
+async function analyzeFromRoot(rootDir, reportedRoot) {
   const files = await scanFiles(rootDir);
 
   if (files.length === 0) {
     return {
-      rootDir,
+      rootDir: reportedRoot,
       fileCount: 0,
       graph: {},
-      message: 'No JS/TS files found at the given path.',
+      message: 'No JS/TS files found in the selected repository and branch.',
     };
   }
 
   const graph = await buildDependencyGraph(files, rootDir);
 
   return {
-    rootDir,
+    rootDir: reportedRoot,
     fileCount: files.length,
     graph,
   };
+}
+
+async function analyzeLocalProject(localPath) {
+  const rootDir = await validateLocalRepositoryPath(localPath);
+  return analyzeFromRoot(rootDir, rootDir);
+}
+
+async function analyzeGitHubProject(githubConfig, githubToken) {
+  const sourceMode = githubConfig?.mode || 'public';
+
+  let owner = githubConfig?.owner;
+  let repo = githubConfig?.repo;
+  let branch = githubConfig?.branch;
+  const token = sourceMode === 'owned' ? githubToken : undefined;
+
+  if (githubConfig?.url) {
+    const parsed = parseGitHubRepoUrl(githubConfig.url);
+    owner = parsed.owner;
+    repo = parsed.repo;
+  }
+
+  if (!owner || !repo) {
+    const err = new Error('GitHub source requires a valid repository owner and name.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const repoDetails = await fetchRepoDetails({ owner, repo, token });
+  const branches = await fetchRepoBranches({
+    owner: repoDetails.owner,
+    repo: repoDetails.repo,
+    token,
+  });
+
+  const normalizedBranches = normalizeBranchList(branches, repoDetails.defaultBranch);
+  const selectedBranch = branch || repoDetails.defaultBranch;
+
+  if (!normalizedBranches.some((b) => b.name === selectedBranch)) {
+    const err = new Error(`Branch "${selectedBranch}" was not found for ${repoDetails.fullName}.`);
+    err.statusCode = 400;
+    throw err;
+  }
+
+  let archive;
+  try {
+    archive = await downloadGitHubRepositoryArchive({
+      owner: repoDetails.owner,
+      repo: repoDetails.repo,
+      branch: selectedBranch,
+      token,
+    });
+
+    return await analyzeFromRoot(
+      archive.extractedRepoPath,
+      `github:${repoDetails.owner}/${repoDetails.repo}#${selectedBranch}`,
+    );
+  } finally {
+    if (archive?.tempRoot) {
+      await rm(archive.tempRoot, { recursive: true, force: true });
+    }
+  }
+}
+
+export async function validateLocalRepository(projectPath) {
+  const rootDir = await validateLocalRepositoryPath(projectPath);
+  return { valid: true, path: rootDir };
+}
+
+export async function analyzeProject(config, githubToken) {
+  if (typeof config === 'string') {
+    return analyzeLocalProject(config);
+  }
+
+  if (config.source === 'local') {
+    return analyzeLocalProject(config.localPath);
+  }
+
+  if (config.source === 'github') {
+    return analyzeGitHubProject(config.github, githubToken);
+  }
+
+  const err = new Error('Invalid repository source configuration.');
+  err.statusCode = 400;
+  throw err;
 }

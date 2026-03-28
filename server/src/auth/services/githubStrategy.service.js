@@ -11,13 +11,14 @@ function getGitHubCallbackUrl() {
   return `${getServerUrl()}/api/auth/github/callback`;
 }
 
-function mapProfileToUser(profile) {
+function mapProfileToUser(profile, githubAccessToken) {
   return {
     id: profile.id,
     username: profile.username,
     email: profile.emails?.[0]?.value,
     avatar: profile.photos?.[0]?.value,
     role: 'USER',
+    githubAccessToken,
   };
 }
 
@@ -28,9 +29,9 @@ export function createGitHubStrategy() {
       clientSecret: process.env.GITHUB_CLIENT_SECRET,
       callbackURL: getGitHubCallbackUrl(),
     },
-    async (_accessToken, _refreshToken, profile, done) => {
+    async (accessToken, _refreshToken, profile, done) => {
       try {
-        const user = mapProfileToUser(profile);
+        const user = mapProfileToUser(profile, accessToken);
         return done(null, user);
       } catch (error) {
         return done(error, null);

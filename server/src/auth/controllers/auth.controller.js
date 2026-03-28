@@ -2,6 +2,15 @@ import jwt from 'jsonwebtoken';
 
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
 
+function buildCookieOptions() {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  };
+}
+
 function signToken(user) {
   return jwt.sign(
     {
@@ -18,12 +27,12 @@ function signToken(user) {
 
 
 function setTokenCookie(res, token) {
-  res.cookie('token', token, {
-    httpOnly: true,
-    secure:   process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge:   7 * 24 * 60 * 60 * 1000,
-  });
+  res.cookie('token', token, buildCookieOptions());
+}
+
+function setGitHubTokenCookie(res, githubToken) {
+  if (!githubToken) return;
+  res.cookie('github_token', githubToken, buildCookieOptions());
 }
 
 export function handleGitHubCallback(req, res) {
@@ -37,6 +46,7 @@ export function handleGitHubCallback(req, res) {
 
   const token = signToken(req.user);
   setTokenCookie(res, token);
+  setGitHubTokenCookie(res, req.user.githubAccessToken);
 
   return res.redirect(`${CLIENT_URL}/dashboard`);
 }
@@ -61,5 +71,6 @@ export function getCurrentUser(req, res) {
 
 export function logout(_req, res) {
   res.clearCookie('token');
+  res.clearCookie('github_token');
   return res.json({ message: 'Logged out successfully.' });
 }

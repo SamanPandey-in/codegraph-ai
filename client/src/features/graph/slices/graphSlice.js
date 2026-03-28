@@ -3,9 +3,9 @@ import { graphService } from '../services/graphService';
 
 export const analyzeCodebase = createAsyncThunk(
   'graph/analyzeCodebase',
-  async (projectPath, { rejectWithValue }) => {
+  async (analyzeConfig, { rejectWithValue }) => {
     try {
-      return await graphService.analyze(projectPath);
+      return await graphService.analyze(analyzeConfig);
     } catch (err) {
       const message =
         err.response?.data?.error ||

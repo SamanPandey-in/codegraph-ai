@@ -1,23 +1,461 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { FolderOpen, Loader2, Sparkles } from 'lucide-react';
+import {
+  AlertCircle,
+  CheckCircle2,
+  FolderOpen,
+  Github,
+  Loader2,
+  Sparkles,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useAuth } from '@/features/auth';
+import { graphService } from '../services/graphService';
 import { analyzeCodebase, selectGraphStatus } from '../slices/graphSlice';
+
+function toErrorMessage(err, fallback) {
+  const message = err?.response?.data?.error || err?.message || fallback;
+  const missing = err?.response?.data?.missing;
+
+  if (Array.isArray(missing) && missing.length > 0) {
+    return `${message} Missing: ${missing.join(', ')}`;
+  }
+
+  return message;
+}
+
+function SourceToggle({ value, onChange, disabled }) {
+  return (
+    <div className="grid grid-cols-2 gap-2 rounded-lg border border-border bg-muted/30 p-1">
+      <button
+        type="button"
+        className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+          value === 'local'
+            ? 'bg-background shadow-sm text-foreground'
+            : 'text-muted-foreground hover:text-foreground'
+        }`}
+        disabled={disabled}
+        onClick={() => onChange('local')}
+      >
+        Local Repository
+      </button>
+      <button
+        type="button"
+        className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+          value === 'github'
+            ? 'bg-background shadow-sm text-foreground'
+            : 'text-muted-foreground hover:text-foreground'
+        }`}
+        disabled={disabled}
+        onClick={() => onChange('github')}
+      >
+        GitHub Repository
+      </button>
+    </div>
+  );
+}
+
+function GitHubModeToggle({ value, onChange, disabled }) {
+  return (
+    <div className="grid grid-cols-2 gap-2 rounded-lg border border-border bg-muted/30 p-1">
+      <button
+        type="button"
+        className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+          value === 'public'
+            ? 'bg-background shadow-sm text-foreground'
+            : 'text-muted-foreground hover:text-foreground'
+        }`}
+        disabled={disabled}
+        onClick={() => onChange('public')}
+      >
+        Public Repository
+      </button>
+      <button
+        type="button"
+        className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+          value === 'owned'
+            ? 'bg-background shadow-sm text-foreground'
+            : 'text-muted-foreground hover:text-foreground'
+        }`}
+        disabled={disabled}
+        onClick={() => onChange('owned')}
+      >
+        My Repositories
+      </button>
+    </div>
+  );
+}
 
 export default function AnalyzeForm() {
   const dispatch = useDispatch();
   const status = useSelector(selectGraphStatus);
-  const [path, setPath] = useState('');
+  const { isAuthenticated, loginWithGithub } = useAuth();
+
+  const [source, setSource] = useState('local');
+
+  const [localPath, setLocalPath] = useState('');
+  const [localValidationState, setLocalValidationState] = useState('idle');
+  const [localError, setLocalError] = useState('');
+  const [localBrowseLoading, setLocalBrowseLoading] = useState(false);
+  const [pickerCapabilitiesLoading, setPickerCapabilitiesLoading] = useState(true);
+  const [pickerCapabilities, setPickerCapabilities] = useState({
+    supported: false,
+    message: 'Checking folder picker availability...',
+  });
+
+  const [githubMode, setGitHubMode] = useState('public');
+  const [publicRepoUrl, setPublicRepoUrl] = useState('');
+  const [publicRepoInfo, setPublicRepoInfo] = useState(null);
+  const [publicBranches, setPublicBranches] = useState([]);
+  const [publicBranch, setPublicBranch] = useState('');
+  const [publicLoading, setPublicLoading] = useState(false);
+  const [publicError, setPublicError] = useState('');
+
+  const [ownedReposLoading, setOwnedReposLoading] = useState(false);
+  const [ownedReposError, setOwnedReposError] = useState('');
+  const [ownedRepos, setOwnedRepos] = useState([]);
+  const [repoQuery, setRepoQuery] = useState('');
+  const [hasLoadedOwnedRepos, setHasLoadedOwnedRepos] = useState(false);
+  const [ownedAuthRequired, setOwnedAuthRequired] = useState(false);
+  const [selectedOwnedRepo, setSelectedOwnedRepo] = useState(null);
+  const [ownedBranchesLoading, setOwnedBranchesLoading] = useState(false);
+  const [ownedBranchesError, setOwnedBranchesError] = useState('');
+  const [ownedBranches, setOwnedBranches] = useState([]);
+  const [ownedBranch, setOwnedBranch] = useState('');
 
   const isLoading = status === 'loading';
 
-  const handleSubmit = (e) => {
+  const filteredOwnedRepos = useMemo(() => {
+    const query = repoQuery.trim().toLowerCase();
+    if (!query) return ownedRepos;
+
+    return ownedRepos.filter((repo) => {
+      return (
+        repo.fullName.toLowerCase().includes(query) ||
+        repo.name.toLowerCase().includes(query)
+      );
+    });
+  }, [ownedRepos, repoQuery]);
+
+  const canAnalyze = useMemo(() => {
+    if (source === 'local') {
+      return Boolean(localPath.trim()) && localValidationState !== 'loading';
+    }
+
+    if (githubMode === 'public') {
+      return Boolean(
+        publicRepoUrl.trim() &&
+          publicRepoInfo &&
+          publicBranch &&
+          !publicLoading,
+      );
+    }
+
+    return Boolean(
+      isAuthenticated &&
+        !ownedAuthRequired &&
+        selectedOwnedRepo &&
+        ownedBranch &&
+        !ownedBranchesLoading,
+    );
+  }, [
+    source,
+    localPath,
+    localValidationState,
+    githubMode,
+    publicRepoUrl,
+    publicRepoInfo,
+    publicBranch,
+    publicLoading,
+    isAuthenticated,
+    ownedAuthRequired,
+    selectedOwnedRepo,
+    ownedBranch,
+    ownedBranchesLoading,
+  ]);
+
+  const validateLocalRepository = async () => {
+    const trimmed = localPath.trim();
+    if (!trimmed) {
+      setLocalValidationState('idle');
+      setLocalError('');
+      return false;
+    }
+
+    setLocalValidationState('loading');
+    setLocalError('');
+
+    try {
+      await graphService.validateLocalPath(trimmed);
+      setLocalValidationState('succeeded');
+      return true;
+    } catch (err) {
+      setLocalValidationState('failed');
+      setLocalError(
+        toErrorMessage(
+          err,
+          'Local path validation failed. Please provide a valid repository path.',
+        ),
+      );
+      return false;
+    }
+  };
+
+  const resolvePublicRepository = async () => {
+    const trimmed = publicRepoUrl.trim();
+
+    if (!trimmed) {
+      setPublicRepoInfo(null);
+      setPublicBranches([]);
+      setPublicBranch('');
+      setPublicError('Please enter a public GitHub repository URL.');
+      return false;
+    }
+
+    setPublicLoading(true);
+    setPublicError('');
+
+    try {
+      const data = await graphService.resolvePublicRepo(trimmed);
+      const branches = data.branches || [];
+      const defaultBranch = data.repository?.defaultBranch || branches[0]?.name || '';
+
+      setPublicRepoInfo(data.repository);
+      setPublicBranches(branches);
+      setPublicBranch(defaultBranch);
+      return true;
+    } catch (err) {
+      setPublicRepoInfo(null);
+      setPublicBranches([]);
+      setPublicBranch('');
+      setPublicError(
+        toErrorMessage(err, 'Could not validate this public repository.'),
+      );
+      return false;
+    } finally {
+      setPublicLoading(false);
+    }
+  };
+
+  const fetchOwnedRepositories = async () => {
+    setOwnedReposLoading(true);
+    setOwnedReposError('');
+
+    try {
+      const data = await graphService.getOwnedRepos();
+      const repositories = data.repositories || [];
+
+      setOwnedRepos(repositories);
+      setHasLoadedOwnedRepos(true);
+      setOwnedAuthRequired(false);
+
+      if (repositories.length === 0) {
+        setOwnedReposError('No repositories found in your GitHub account.');
+      }
+    } catch (err) {
+      const authRequired = err?.response?.status === 401;
+      setOwnedRepos([]);
+      setOwnedAuthRequired(authRequired);
+      setOwnedReposError(
+        toErrorMessage(
+          err,
+          'Failed to fetch your repositories. Please connect GitHub and try again.',
+        ),
+      );
+      setHasLoadedOwnedRepos(true);
+    } finally {
+      setOwnedReposLoading(false);
+    }
+  };
+
+  const fetchOwnedBranches = async (repo) => {
+    setOwnedBranchesLoading(true);
+    setOwnedBranchesError('');
+
+    try {
+      const data = await graphService.getRepoBranches({
+        source: 'owned',
+        owner: repo.owner,
+        repo: repo.name,
+      });
+
+      const branches = data.branches || [];
+      const defaultBranch = data.repository?.defaultBranch || branches[0]?.name || '';
+
+      setOwnedBranches(branches);
+      setOwnedBranch(defaultBranch);
+    } catch (err) {
+      setOwnedBranches([]);
+      setOwnedBranch('');
+      setOwnedBranchesError(
+        toErrorMessage(err, 'Failed to fetch repository branches.'),
+      );
+    } finally {
+      setOwnedBranchesLoading(false);
+    }
+  };
+
+  const handleRefreshOwnedRepos = async () => {
+    if (!isAuthenticated) {
+      setOwnedReposError('GitHub login is required to load your repositories.');
+      return;
+    }
+
+    await fetchOwnedRepositories();
+  };
+
+  const handleOwnedRepoSelect = async (repo) => {
+    setSelectedOwnedRepo(repo);
+    await fetchOwnedBranches(repo);
+  };
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadPickerCapabilities = async () => {
+      setPickerCapabilitiesLoading(true);
+
+      try {
+        const data = await graphService.getLocalPickerCapabilities();
+        if (!mounted) return;
+        setPickerCapabilities({
+          supported: Boolean(data?.supported),
+          message:
+            data?.message ||
+            'Native folder picker is unavailable, paste an absolute path manually.',
+        });
+      } catch {
+        if (!mounted) return;
+        setPickerCapabilities({
+          supported: false,
+          message: 'Native folder picker is unavailable, paste an absolute path manually.',
+        });
+      } finally {
+        if (mounted) {
+          setPickerCapabilitiesLoading(false);
+        }
+      }
+    };
+
+    loadPickerCapabilities();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (source !== 'github' || githubMode !== 'owned') return;
+    if (!isAuthenticated) return;
+    if (hasLoadedOwnedRepos || ownedReposLoading) return;
+
+    fetchOwnedRepositories();
+  }, [source, githubMode, isAuthenticated, hasLoadedOwnedRepos, ownedReposLoading]);
+
+  const buildAnalyzePayload = () => {
+    if (source === 'local') {
+      return {
+        source: 'local',
+        localPath: localPath.trim(),
+      };
+    }
+
+    if (githubMode === 'public') {
+      return {
+        source: 'github',
+        github: {
+          mode: 'public',
+          url: publicRepoUrl.trim(),
+          owner: publicRepoInfo.owner,
+          repo: publicRepoInfo.repo,
+          branch: publicBranch,
+        },
+      };
+    }
+
+    return {
+      source: 'github',
+      github: {
+        mode: 'owned',
+        owner: selectedOwnedRepo.owner,
+        repo: selectedOwnedRepo.name,
+        branch: ownedBranch,
+      },
+    };
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    const trimmed = path.trim();
-    if (!trimmed) return;
-    dispatch(analyzeCodebase(trimmed));
+
+    if (source === 'local') {
+      const valid = await validateLocalRepository();
+      if (!valid) return;
+    }
+
+    if (source === 'github' && githubMode === 'public') {
+      const resolved = await resolvePublicRepository();
+      if (!resolved) return;
+    }
+
+    if (source === 'github' && githubMode === 'owned' && !selectedOwnedRepo) {
+      setOwnedReposError('Please select one of your repositories and a branch.');
+      return;
+    }
+
+    dispatch(analyzeCodebase(buildAnalyzePayload()));
+  };
+
+  const handleSourceChange = (nextSource) => {
+    setSource(nextSource);
+  };
+
+  const handleGitHubModeChange = (nextMode) => {
+    setGitHubMode(nextMode);
+    setOwnedReposError('');
+    setOwnedAuthRequired(false);
+
+    if (nextMode === 'owned') {
+      setPublicError('');
+      setPublicRepoInfo(null);
+      setPublicBranches([]);
+      setPublicBranch('');
+    }
+  };
+
+  const browseLocalPath = async () => {
+    if (!pickerCapabilities.supported) {
+      setLocalError(pickerCapabilities.message);
+      return;
+    }
+
+    setLocalBrowseLoading(true);
+    setLocalError('');
+
+    try {
+      const result = await graphService.browseLocalPath();
+      if (!result?.path) return;
+
+      setLocalPath(result.path);
+      setLocalValidationState('idle');
+      setLocalError('');
+    } catch (err) {
+      const timedOut =
+        err?.code === 'ECONNABORTED' ||
+        err?.response?.status === 408;
+
+      setLocalError(
+        timedOut
+          ? 'Folder picker timed out. Please click Browse again or paste the absolute path manually.'
+          : toErrorMessage(
+              err,
+              'Could not open native folder picker. Please paste the absolute path manually.',
+            ),
+      );
+    } finally {
+      setLocalBrowseLoading(false);
+    }
   };
 
   return (
@@ -29,33 +467,352 @@ export default function AnalyzeForm() {
         Analyze a Codebase
       </h1>
       <p className="mt-3 max-w-md text-center text-muted-foreground">
-        Enter the absolute path to a local repository. The server will parse
-        every&nbsp;JS/TS file and return its full dependency graph.
+        Choose a local or GitHub repository, select a branch when required, and
+        run dependency graph analysis.
       </p>
 
       <form
         onSubmit={handleSubmit}
-        className="mt-10 w-full max-w-lg flex flex-col gap-3"
+        className="mt-10 w-full max-w-2xl flex flex-col gap-4"
       >
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="project-path">Project path</Label>
-          <div className="relative">
-            <FolderOpen className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
-            <Input
-              id="project-path"
-              type="text"
-              value={path}
-              onChange={(e) => setPath(e.target.value)}
-              placeholder="/absolute/path/to/your/project"
-              className="pl-9 font-mono text-sm"
-              disabled={isLoading}
-              autoComplete="off"
-              spellCheck={false}
-            />
-          </div>
-        </div>
+        <SourceToggle
+          value={source}
+          onChange={handleSourceChange}
+          disabled={isLoading}
+        />
 
-        <Button type="submit" size="lg" disabled={isLoading || !path.trim()}>
+        {source === 'local' && (
+          <div className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4">
+            <Label htmlFor="project-path">Local repository path</Label>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <FolderOpen className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  id="project-path"
+                  type="text"
+                  value={localPath}
+                  onChange={(e) => {
+                    setLocalPath(e.target.value);
+                    setLocalValidationState('idle');
+                    setLocalError('');
+                  }}
+                  onBlur={validateLocalRepository}
+                  placeholder="C:\\Users\\you\\your-project"
+                  className="pl-9 font-mono text-sm"
+                  disabled={isLoading}
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={browseLocalPath}
+                disabled={
+                  isLoading ||
+                  localBrowseLoading ||
+                  pickerCapabilitiesLoading ||
+                  !pickerCapabilities.supported
+                }
+              >
+                {localBrowseLoading ? (
+                  <>
+                    <Loader2 className="animate-spin" />
+                    Opening
+                  </>
+                ) : pickerCapabilitiesLoading ? (
+                  <>
+                    <Loader2 className="animate-spin" />
+                    Checking
+                  </>
+                ) : (
+                  'Browse'
+                )}
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={validateLocalRepository}
+                disabled={isLoading || localValidationState === 'loading' || !localPath.trim()}
+              >
+                {localValidationState === 'loading' ? (
+                  <>
+                    <Loader2 className="animate-spin" />
+                    Validating
+                  </>
+                ) : (
+                  'Validate'
+                )}
+              </Button>
+            </div>
+
+            {localValidationState === 'succeeded' && (
+              <p className="text-xs text-emerald-500 flex items-center gap-1.5">
+                <CheckCircle2 className="size-3.5" />
+                Local path is valid.
+              </p>
+            )}
+
+            {localValidationState === 'failed' && localError && (
+              <p className="text-xs text-destructive flex items-center gap-1.5">
+                <AlertCircle className="size-3.5" />
+                {localError}
+              </p>
+            )}
+
+            <p className="text-xs text-muted-foreground">
+              Use an absolute path. Browse opens a native folder picker and
+              fills the selected absolute path. If unavailable, paste the path
+              from your file explorer.
+            </p>
+
+            {!pickerCapabilitiesLoading && !pickerCapabilities.supported && (
+              <p className="text-xs text-muted-foreground">
+                {pickerCapabilities.message}
+              </p>
+            )}
+          </div>
+        )}
+
+        {source === 'github' && (
+          <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
+            <GitHubModeToggle
+              value={githubMode}
+              onChange={handleGitHubModeChange}
+              disabled={isLoading}
+            />
+
+            {githubMode === 'public' && (
+              <>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="public-github-url">Public GitHub repository URL</Label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Github className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+                      <Input
+                        id="public-github-url"
+                        type="text"
+                        value={publicRepoUrl}
+                        onChange={(e) => {
+                          setPublicRepoUrl(e.target.value);
+                          setPublicError('');
+                          setPublicRepoInfo(null);
+                          setPublicBranches([]);
+                          setPublicBranch('');
+                        }}
+                        placeholder="https://github.com/owner/repository"
+                        className="pl-9"
+                        disabled={isLoading}
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                    </div>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={isLoading || publicLoading || !publicRepoUrl.trim()}
+                      onClick={resolvePublicRepository}
+                    >
+                      {publicLoading ? (
+                        <>
+                          <Loader2 className="animate-spin" />
+                          Checking
+                        </>
+                      ) : (
+                        'Validate'
+                      )}
+                    </Button>
+                  </div>
+                </div>
+
+                {publicRepoInfo && (
+                  <div className="rounded-md border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-600">
+                    <div className="flex items-center gap-1.5 font-medium">
+                      <CheckCircle2 className="size-3.5" />
+                      Repository found: {publicRepoInfo.fullName}
+                    </div>
+                    <div className="mt-1 text-emerald-700/80">
+                      Default branch: {publicRepoInfo.defaultBranch}
+                    </div>
+                  </div>
+                )}
+
+                {publicError && (
+                  <p className="text-xs text-destructive flex items-center gap-1.5">
+                    <AlertCircle className="size-3.5" />
+                    {publicError}
+                  </p>
+                )}
+
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="public-branch">Branch</Label>
+                  <select
+                    id="public-branch"
+                    value={publicBranch}
+                    onChange={(e) => setPublicBranch(e.target.value)}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={
+                      isLoading ||
+                      publicLoading ||
+                      !publicRepoInfo ||
+                      publicBranches.length === 0
+                    }
+                  >
+                    <option value="">
+                      {publicBranches.length === 0
+                        ? 'Validate repository first'
+                        : 'Select branch'}
+                    </option>
+                    {publicBranches.map((branch) => (
+                      <option key={branch.name} value={branch.name}>
+                        {branch.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
+
+            {githubMode === 'owned' && (
+              <>
+                {(!isAuthenticated || ownedAuthRequired) && (
+                  <div className="rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground flex items-center justify-between gap-2">
+                    <span>GitHub authentication required. Please log in with GitHub.</span>
+                    <Button type="button" variant="outline" onClick={loginWithGithub}>
+                      <Github />
+                      Connect GitHub
+                    </Button>
+                  </div>
+                )}
+
+                {isAuthenticated && !ownedAuthRequired && (
+                  <>
+                    <div className="flex items-center justify-between gap-2">
+                      <Label htmlFor="owned-repo-search">Your repositories</Label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleRefreshOwnedRepos}
+                        disabled={isLoading || ownedReposLoading}
+                      >
+                        {ownedReposLoading ? (
+                          <>
+                            <Loader2 className="animate-spin" />
+                            Loading
+                          </>
+                        ) : (
+                          'Refresh'
+                        )}
+                      </Button>
+                    </div>
+
+                    <Input
+                      id="owned-repo-search"
+                      type="text"
+                      value={repoQuery}
+                      onChange={(e) => setRepoQuery(e.target.value)}
+                      placeholder="Search repositories..."
+                      disabled={isLoading || ownedReposLoading}
+                    />
+
+                    {ownedReposLoading && (
+                      <div className="text-sm text-muted-foreground flex items-center gap-2 py-4 justify-center rounded-md border border-border bg-muted/20">
+                        <Loader2 className="size-4 animate-spin" />
+                        Fetching repositories...
+                      </div>
+                    )}
+
+                    {!ownedReposLoading && filteredOwnedRepos.length > 0 && (
+                      <div className="grid gap-2 max-h-60 overflow-auto pr-1 rounded-md border border-border p-2">
+                        {filteredOwnedRepos.map((repo) => (
+                          <button
+                            key={repo.id}
+                            type="button"
+                            className={`text-left rounded-md border px-3 py-2 transition-colors ${
+                              selectedOwnedRepo?.id === repo.id
+                                ? 'border-primary bg-primary/10'
+                                : 'border-border hover:bg-muted/50'
+                            }`}
+                            onClick={() => handleOwnedRepoSelect(repo)}
+                          >
+                            <div className="font-medium text-sm">{repo.fullName}</div>
+                            <div className="text-xs text-muted-foreground mt-1">
+                              Default branch: {repo.defaultBranch}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {!ownedReposLoading && hasLoadedOwnedRepos && filteredOwnedRepos.length === 0 && (
+                      <div className="text-sm text-muted-foreground border border-dashed border-border rounded-lg p-3 text-center">
+                        {ownedReposError || 'No repositories found for this account.'}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {selectedOwnedRepo && (
+                  <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs">
+                    <p className="font-medium text-foreground">
+                      Selected repository: {selectedOwnedRepo.fullName}
+                    </p>
+                  </div>
+                )}
+
+                {ownedReposError && (
+                  <p className="text-xs text-destructive flex items-center gap-1.5">
+                    <AlertCircle className="size-3.5" />
+                    {ownedReposError}
+                  </p>
+                )}
+
+                {selectedOwnedRepo && (
+                  <div className="flex flex-col gap-1.5 rounded-md border border-border bg-muted/20 p-3">
+                    <Label htmlFor="owned-branch-inline">Branch</Label>
+                    <select
+                      id="owned-branch-inline"
+                      value={ownedBranch}
+                      onChange={(e) => setOwnedBranch(e.target.value)}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={ownedBranchesLoading || ownedBranches.length === 0}
+                    >
+                      <option value="">
+                        {ownedBranches.length === 0
+                          ? 'Select repository first'
+                          : 'Select branch'}
+                      </option>
+                      {ownedBranches.map((branch) => (
+                        <option key={branch.name} value={branch.name}>
+                          {branch.name}
+                        </option>
+                      ))}
+                    </select>
+
+                    {ownedBranchesLoading && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                        <Loader2 className="size-3.5 animate-spin" />
+                        Loading branches...
+                      </p>
+                    )}
+
+                    {ownedBranchesError && (
+                      <p className="text-xs text-destructive flex items-center gap-1.5">
+                        <AlertCircle className="size-3.5" />
+                        {ownedBranchesError}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        <Button type="submit" size="lg" disabled={isLoading || !canAnalyze}>
           {isLoading ? (
             <>
               <Loader2 className="mr-2 size-4 animate-spin" />
@@ -66,17 +823,6 @@ export default function AnalyzeForm() {
           )}
         </Button>
       </form>
-
-      <p className="mt-6 text-xs text-muted-foreground text-center max-w-sm">
-        Tip: use an absolute path like{' '}
-        <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">
-          /home/user/my-project
-        </code>{' '}
-        or{' '}
-        <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">
-          C:\Users\user\my-project
-        </code>
-      </p>
     </div>
   );
 }

@@ -39,9 +39,8 @@ function AppRoutes() {
       <Route element={<PrivateGuard />}>
         <Route element={<Layout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/analyze" element={<AnalyzePage />} />
         </Route>
-
-        <Route path="/analyze" element={<AnalyzePage />} />
       </Route>
 
       <Route path="/graph" element={<Navigate to="/analyze" replace />} />
