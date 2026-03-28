@@ -39,3 +39,9 @@ docker stop codegraph-postgres
 
 ## Create infrastructure/connections.js
 pg Pool + ioredis client, both exported as singletons
+
+## Create BaseAgent.js and confidence.js
+server/src/agents/core/ — buildResult(), scoring formulas per agent
+
+## Create AuditLogger + JobStatusEmitter
+AuditLogger writes to agent_audit_log; Emitter does Redis pub/sub for SSE
