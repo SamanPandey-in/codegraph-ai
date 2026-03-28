@@ -7,7 +7,7 @@ Why Sprint 1 before any AI features: The existing analyze.service.js is a synchr
 ### Install server deps:
 npm install pg ioredis bullmq openai @pgvector/pg
 
-## Run DB migrations:
+### Run DB migrations:
 Run this in your project root:
 ```
 docker run -d ^
@@ -31,20 +31,23 @@ psql -h localhost -p 5433 -U postgres -d codegraph -f ./server/src/infrastructur
 ```
 Enter password `postgres`
 
-## Further onwards:
+### Further onwards:
 ```
 docker start codegraph-postgres
 docker stop codegraph-postgres
 ```
 
-## Create infrastructure/connections.js
+### Create infrastructure/connections.js - new
 pg Pool + ioredis client, both exported as singletons
 
-## Create BaseAgent.js and confidence.js
+### Create BaseAgent.js and confidence.js - new
 server/src/agents/core/ — buildResult(), scoring formulas per agent
 
-## Create AuditLogger + JobStatusEmitter
+### Create AuditLogger + JobStatusEmitter - new
 AuditLogger writes to agent_audit_log; Emitter does Redis pub/sub for SSE
 
-## Extract IngestionAgent from analyze.service.js
+### Extract IngestionAgent from analyze.service.js - refactor
 Move _handleGitHub + _handleLocal into agent class; keep original file temporarily
+
+### Extract ScannerAgent from fileScanner.service.js - refactor
+Wrap scanFiles() in agent class; add monorepo detection + language breakdown

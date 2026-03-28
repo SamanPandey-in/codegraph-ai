@@ -1,4 +1,4 @@
-import { scanFiles } from './fileScanner.service.js';
+import { scanRepository } from './fileScanner.service.js';
 import { buildDependencyGraph } from './astParser.service.js';
 import { IngestionAgent } from '../../agents/ingestion/IngestionAgent.js';
 
@@ -18,13 +18,15 @@ async function runIngestion(input) {
 }
 
 async function analyzeFromRoot(rootDir, reportedRoot) {
-  const files = await scanFiles(rootDir);
+  const { manifest, summary } = await scanRepository(rootDir);
+  const files = manifest.map((item) => item.absolutePath);
 
   if (files.length === 0) {
     return {
       rootDir: reportedRoot,
       fileCount: 0,
       graph: {},
+      scannerSummary: summary,
       message: 'No JS/TS files found in the selected repository and branch.',
     };
   }
@@ -33,7 +35,8 @@ async function analyzeFromRoot(rootDir, reportedRoot) {
 
   return {
     rootDir: reportedRoot,
-    fileCount: files.length,
+    fileCount: summary?.eligibleFiles ?? files.length,
+    scannerSummary: summary,
     graph,
   };
 }
