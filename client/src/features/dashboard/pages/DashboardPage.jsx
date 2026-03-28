@@ -117,18 +117,18 @@ const formatDate = (value) => {
 
 function MetricCard({ icon, title, value, helper }) {
   return (
-    <Card>
+    <Card className="shadow-sm hover:shadow-md transition-shadow">
       <CardHeader className="pb-2">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span className="flex size-8 items-center justify-center rounded-md border border-border bg-muted">
+          <span className="flex size-8 items-center justify-center rounded-lg border border-border bg-muted/50">
             {icon}
           </span>
-          <span>{title}</span>
+          <span className="font-medium">{title}</span>
         </div>
       </CardHeader>
       <CardContent>
-        <p className="text-2xl font-semibold tracking-tight">{value}</p>
-        <p className="mt-1 text-xs text-muted-foreground">{helper}</p>
+        <p className="text-2xl font-bold tracking-tight text-foreground">{value}</p>
+        <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground/80">{helper}</p>
       </CardContent>
     </Card>
   );
@@ -308,19 +308,19 @@ export default function DashboardPage() {
         </h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {QUICK_ACTIONS.map((action) => (
-            <Card key={action.title} className="group hover:border-primary/50 transition-colors">
+            <Card key={action.title} className="group shadow-sm hover:shadow-md hover:border-gold/30 transition-all duration-300">
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-2">
-                  <div className="flex size-9 items-center justify-center rounded-lg border border-border bg-muted">
+                  <div className="flex size-9 items-center justify-center rounded-lg border border-border bg-muted/50 group-hover:bg-gold/5 transition-colors">
                     {action.icon}
                   </div>
-                  <CardTitle className="text-base">{action.title}</CardTitle>
+                  <CardTitle className="text-base font-bold">{action.title}</CardTitle>
                 </div>
-                <CardDescription>{action.description}</CardDescription>
+                <CardDescription className="text-xs leading-relaxed">{action.description}</CardDescription>
               </CardHeader>
               <CardContent>
                 <Link to={action.href}>
-                  <Button size="sm" className="gap-1.5 w-full sm:w-auto">
+                  <Button size="sm" className="gap-1.5 w-full sm:w-auto bg-gold text-white hover:bg-gold/90 shadow-sm">
                     {action.cta}
                     <ArrowRight className="size-3.5" />
                   </Button>
@@ -329,19 +329,19 @@ export default function DashboardPage() {
             </Card>
           ))}
 
-          <Card className="border-dashed bg-muted/30">
+          <Card className="border-dashed bg-muted/10 shadow-none border-muted-foreground/20">
             <CardHeader className="pb-3">
               <div className="flex items-center gap-2">
-                <div className="flex size-9 items-center justify-center rounded-lg border border-border bg-muted">
-                  <Terminal className="size-5 text-muted-foreground" />
+                <div className="flex size-9 items-center justify-center rounded-lg border border-border bg-muted/50">
+                  <Terminal className="size-5 text-muted-foreground/60" />
                 </div>
-                <CardTitle className="text-base text-muted-foreground">
+                <CardTitle className="text-base text-muted-foreground/80 font-medium">
                   Server must be running
                 </CardTitle>
               </div>
-              <CardDescription>
-                Start the backend before analyzing:{' '}
-                <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">
+              <CardDescription className="text-xs">
+                Start the backend:{' '}
+                <code className="rounded bg-muted px-1 py-0.5 font-mono text-[10px] text-foreground/70">
                   cd server &amp;&amp; npm run dev
                 </code>
               </CardDescription>
@@ -507,37 +507,37 @@ export default function DashboardPage() {
           {!isLoadingFirstTime && !error?.message && visibleRepositories.length > 0 ? (
             <div className="grid gap-3">
               {visibleRepositories.map((repo) => (
-                <Card key={repo.id}>
+                <Card key={repo.id} className="shadow-sm hover:shadow-md transition-all border-border/60 hover:border-border">
                   <CardContent className="flex flex-col gap-3 py-4">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
-                        <h3 className="text-sm font-semibold text-foreground">
+                        <h3 className="text-sm font-bold text-foreground hover:text-gold transition-colors cursor-pointer">
                           {repo.fullName || `${repo.owner}/${repo.name}`}
                         </h3>
-                        <p className="text-xs text-muted-foreground">
-                          Source: {repo.source} · Branch: {repo.branch || 'unknown'}
+                        <p className="text-[11px] text-muted-foreground/80 mt-0.5">
+                          Source: <span className="text-foreground/70">{repo.source}</span> · Branch: <span className="text-foreground/70">{repo.branch || 'unknown'}</span>
                         </p>
                       </div>
-                      <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                      <span className="rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
                         {repo.status}
                       </span>
                     </div>
 
-                    <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="grid gap-2 text-[11px] text-muted-foreground sm:grid-cols-2 lg:grid-cols-4">
                       <p>
-                        <span className="font-medium text-foreground">Analyzed:</span>{' '}
+                        <span className="font-semibold text-foreground/80">Analyzed:</span>{' '}
                         {formatDate(repo.analyzedAt)}
                       </p>
                       <p>
-                        <span className="font-medium text-foreground">Nodes:</span>{' '}
+                        <span className="font-semibold text-foreground/80">Nodes:</span>{' '}
                         {repo.nodeCount ?? '-'}
                       </p>
                       <p>
-                        <span className="font-medium text-foreground">Edges:</span>{' '}
+                        <span className="font-semibold text-foreground/80">Edges:</span>{' '}
                         {repo.edgeCount ?? '-'}
                       </p>
                       <p className="truncate" title={repo.commitSha || ''}>
-                        <span className="font-medium text-foreground">Commit:</span>{' '}
+                        <span className="font-semibold text-foreground/80">Commit:</span>{' '}
                         {repo.commitSha ? repo.commitSha.slice(0, 12) : '-'}
                       </p>
                     </div>

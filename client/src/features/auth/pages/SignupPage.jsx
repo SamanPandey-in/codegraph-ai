@@ -146,23 +146,23 @@ export default function SignupPage() {
       </div>
 
       <div className="hidden lg:relative lg:flex lg:flex-1">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary via-primary/90 to-primary/70">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_left,_var(--tw-gradient-stops))] from-white/10 via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-black">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_left,rgba(255,193,7,0.15),transparent)]" />
           <div className="absolute inset-0 flex flex-col items-center justify-center p-12 text-white">
             <div className="max-w-sm text-center">
-              <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-2xl bg-white/10 backdrop-blur-sm">
-                <Code2 className="size-10" />
+              <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10">
+                <Code2 className="size-10 text-gold" />
               </div>
               <h2 className="text-4xl font-bold mb-4">
                 Join Developers Who Ship Faster
               </h2>
-              <p className="text-lg text-white/90 leading-relaxed mb-8">
+              <p className="text-lg text-white/70 leading-relaxed mb-8">
                 Transform how you understand and work with code using
                 AI-powered dependency insights.
               </p>
-              <div className="inline-flex items-center gap-2 rounded-full bg-white/10 backdrop-blur-sm px-4 py-2">
-                <Zap className="size-4" />
-                <span className="text-sm font-medium">
+              <div className="inline-flex items-center gap-2 rounded-full bg-white/5 backdrop-blur-sm border border-white/10 px-4 py-2">
+                <Zap className="size-4 text-gold" />
+                <span className="text-sm font-medium text-white/80">
                   Free to start · No credit card required
                 </span>
               </div>

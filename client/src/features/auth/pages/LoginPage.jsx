@@ -120,15 +120,15 @@ export default function LoginPage() {
       </div>
 
       <div className="hidden lg:relative lg:flex lg:flex-1">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary via-primary/90 to-primary/70">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-white/10 via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-black">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,193,7,0.15),transparent)]" />
           <div className="absolute inset-0 flex flex-col items-center justify-center p-12 text-white">
             <div className="max-w-sm text-center">
-              <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-2xl bg-white/10 backdrop-blur-sm">
-                <Sparkles className="size-10" />
+              <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10">
+                <Sparkles className="size-10 text-gold" />
               </div>
               <h2 className="text-4xl font-bold mb-4">Visualize Your Codebase</h2>
-              <p className="text-lg text-white/90 leading-relaxed">
+              <p className="text-lg text-white/70 leading-relaxed">
                 AI-powered code intelligence that helps you understand, navigate,
                 and optimize your projects with ease.
               </p>
