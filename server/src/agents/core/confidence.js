@@ -77,8 +77,22 @@ export function scoreParser({ totalAttempted = 0, successCount = 0, failedCount 
 	return round3(parseRate * (1 - errorPenalty));
 }
 
-export function scoreGraphBuilder({ resolvedEdges = 0, totalImportSpecifiers = 0, cyclesDetected = 0 } = {}) {
-	const resolutionRate = safeDiv(resolvedEdges, Math.max(totalImportSpecifiers, 1), 0);
+export function scoreGraphBuilder({
+	resolvedEdges = 0,
+	resolvedLocalEdges = resolvedEdges,
+	totalImportSpecifiers = 0,
+	localImportSpecifiers,
+	cyclesDetected = 0,
+} = {}) {
+	const attemptedLocalImports = Number.isFinite(Number(localImportSpecifiers))
+		? Math.max(toNumber(localImportSpecifiers, 0), 0)
+		: Math.max(toNumber(totalImportSpecifiers, 0), 0);
+	const resolutionRate =
+		attemptedLocalImports > 0
+			? safeDiv(resolvedLocalEdges, attemptedLocalImports, 0)
+			: totalImportSpecifiers > 0
+				? 0.9
+				: 1;
 	const cyclePenalty = Math.min(0.15, toNumber(cyclesDetected, 0) * 0.03);
 	return round3(resolutionRate * (1 - cyclePenalty));
 }

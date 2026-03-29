@@ -43,6 +43,10 @@ function resolveToAbsolute(fromFile, specifier) {
   return null;
 }
 
+function isLocalSpecifier(specifier) {
+  return typeof specifier === 'string' && (specifier.startsWith('.') || specifier.startsWith('/'));
+}
+
 function findStronglyConnectedComponents(adjacency) {
   const ids = new Map();
   const low = new Map();
@@ -120,7 +124,10 @@ export class GraphBuilderAgent extends BaseAgent {
     const knownFiles = new Set(parsedFiles.map((f) => f.relativePath));
 
     let totalImportSpecifiers = 0;
+    let localImportSpecifiers = 0;
+    let externalImportSpecifiers = 0;
     let resolvedEdges = 0;
+    let unresolvedLocalImports = 0;
 
     for (const parsed of parsedFiles) {
       const source = parsed.relativePath;
@@ -129,11 +136,23 @@ export class GraphBuilderAgent extends BaseAgent {
       const resolvedDeps = [];
       for (const specifier of parsed.imports || []) {
         totalImportSpecifiers += 1;
+        if (!isLocalSpecifier(specifier)) {
+          externalImportSpecifiers += 1;
+          continue;
+        }
+
+        localImportSpecifiers += 1;
         const abs = resolveToAbsolute(sourceAbs, specifier);
-        if (!abs) continue;
+        if (!abs) {
+          unresolvedLocalImports += 1;
+          continue;
+        }
 
         const rel = normalizeRelative(abs, rootDir);
-        if (!knownFiles.has(rel)) continue;
+        if (!knownFiles.has(rel)) {
+          unresolvedLocalImports += 1;
+          continue;
+        }
 
         resolvedEdges += 1;
         resolvedDeps.push(rel);
@@ -180,7 +199,9 @@ export class GraphBuilderAgent extends BaseAgent {
       edgeCount: edges.length,
       cyclesDetected: cycles.length,
       cycles,
-      unresolvedImports: Math.max(0, totalImportSpecifiers - resolvedEdges),
+      unresolvedImports: unresolvedLocalImports,
+      localImportSpecifiers,
+      externalImportSpecifiers,
       deadCodeCandidates: Object.entries(graph)
         .filter(([_, node]) => (node.metrics?.inDegree || 0) === 0)
         .map(([filePath]) => filePath),
@@ -188,7 +209,9 @@ export class GraphBuilderAgent extends BaseAgent {
 
     const confidence = scoreGraphBuilder({
       resolvedEdges,
+      resolvedLocalEdges: resolvedEdges,
       totalImportSpecifiers,
+      localImportSpecifiers,
       cyclesDetected: topology.cyclesDetected,
     });
 
@@ -203,8 +226,11 @@ export class GraphBuilderAgent extends BaseAgent {
         nodeCount: topology.nodeCount,
         edgeCount: topology.edgeCount,
         resolvedEdges,
+        localImportSpecifiers,
+        externalImportSpecifiers,
         totalImportSpecifiers,
         cyclesDetected: topology.cyclesDetected,
+        unresolvedLocalImports,
       },
       processingTimeMs: Date.now() - start,
     });

@@ -43,6 +43,7 @@ function typeStyle(type) {
 
 const NODE_W = 200;
 const NODE_H = 42;
+const EMPTY_GRAPH = {};
 
 function applyDagreLayout(nodes, edges) {
   const g = new dagre.graphlib.Graph();
@@ -133,7 +134,9 @@ export default function GraphView() {
   const dispatch = useDispatch();
   const rawData = useSelector(selectGraphData);
   const selectedNodeId = useSelector(selectSelectedNodeId);
-  const graph = rawData?.graph ?? {};
+  const graph = rawData?.graph ?? EMPTY_GRAPH;
+  const emptyMessage =
+    rawData?.message || 'No JS/TS files found in the selected directory.';
 
   const { nodes: initialNodes, edges: initialEdges } = useMemo(
     () => graphToFlow(graph),
@@ -156,7 +159,7 @@ export default function GraphView() {
   if (nodes.length === 0) {
     return (
       <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
-        No JS/TS files found in the selected directory.
+        {emptyMessage}
       </div>
     );
   }

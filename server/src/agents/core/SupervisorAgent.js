@@ -170,11 +170,20 @@ export class SupervisorAgent {
         continue;
       }
 
+      const confidenceMessage = `${agent.agentId} confidence ${result.confidence} was too low to continue.`;
+
       if (opts.abortOnCritical) {
         result.status = 'failed';
+        result.errors = [
+          ...(result.errors || []),
+          { message: confidenceMessage },
+        ];
       } else {
         result.status = 'partial';
-        result.warnings = [...(result.warnings || []), 'Critically low confidence; proceeding in degraded mode'];
+        result.warnings = [
+          ...(result.warnings || []),
+          `${confidenceMessage} Proceeding in degraded mode.`,
+        ];
       }
       return result;
     }
@@ -227,14 +236,26 @@ export class SupervisorAgent {
           `
             UPDATE analysis_jobs
             SET
-              status = $1,
+              status = $1::job_status,
               overall_confidence = COALESCE($2, overall_confidence),
               file_count = COALESCE($3, file_count),
               node_count = COALESCE($4, node_count),
               edge_count = COALESCE($5, edge_count),
               error_summary = COALESCE($6, error_summary),
-              started_at = CASE WHEN $1 = 'ingesting' AND started_at IS NULL THEN NOW() ELSE started_at END,
-              completed_at = CASE WHEN $1 IN ('completed', 'failed', 'partial') THEN NOW() ELSE completed_at END,
+              started_at = CASE
+                WHEN $1::job_status = 'ingesting'::job_status AND started_at IS NULL
+                  THEN NOW()
+                ELSE started_at
+              END,
+              completed_at = CASE
+                WHEN $1::job_status IN (
+                  'completed'::job_status,
+                  'failed'::job_status,
+                  'partial'::job_status
+                )
+                  THEN NOW()
+                ELSE completed_at
+              END,
               agent_trace = COALESCE($7::jsonb, agent_trace)
             WHERE id = $8
           `,

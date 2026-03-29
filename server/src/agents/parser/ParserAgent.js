@@ -106,6 +106,7 @@ export class ParserAgent extends BaseAgent {
     return new Promise((resolve) => {
       const worker = new Worker(new URL('./parseWorker.js', import.meta.url), {
         workerData: { filePath, relativePath },
+        execArgv: process.execArgv.filter((arg) => !String(arg).startsWith('--input-type')),
       });
 
       worker.once('message', (result) => {
