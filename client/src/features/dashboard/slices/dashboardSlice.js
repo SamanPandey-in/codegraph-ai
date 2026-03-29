@@ -25,6 +25,26 @@ export const fetchAnalyzedRepositories = createAsyncThunk(
   },
 );
 
+export const fetchRepositoryJobs = createAsyncThunk(
+  'dashboard/fetchRepositoryJobs',
+  async ({ repositoryId, page = 1, limit = 20 } = {}, { rejectWithValue }) => {
+    try {
+      const payload = await dashboardService.getRepositoryJobs({ repositoryId, page, limit });
+      return {
+        repositoryId,
+        ...payload,
+      };
+    } catch (err) {
+      const backendError = err?.response?.data?.error;
+      return rejectWithValue({
+        repositoryId,
+        code: 'REQUEST_FAILED',
+        message: backendError || err?.message || 'Failed to load repository job history.',
+      });
+    }
+  },
+);
+
 const initialState = {
   repositories: [],
   summary: {
@@ -34,6 +54,7 @@ const initialState = {
   },
   status: 'idle',
   error: null,
+  repositoryJobsById: {},
 };
 
 const dashboardSlice = createSlice({
@@ -58,6 +79,41 @@ const dashboardSlice = createSlice({
           code: 'UNKNOWN',
           message: 'Could not load analyzed repositories.',
         };
+      })
+      .addCase(fetchRepositoryJobs.pending, (state, action) => {
+        const repositoryId = action.meta.arg?.repositoryId;
+        if (!repositoryId) return;
+
+        state.repositoryJobsById[repositoryId] = {
+          ...(state.repositoryJobsById[repositoryId] || {}),
+          status: 'loading',
+          error: null,
+        };
+      })
+      .addCase(fetchRepositoryJobs.fulfilled, (state, action) => {
+        const { repositoryId, repository, jobs, pagination } = action.payload;
+        if (!repositoryId) return;
+
+        state.repositoryJobsById[repositoryId] = {
+          status: 'succeeded',
+          error: null,
+          repository: repository || null,
+          jobs: jobs || [],
+          pagination: pagination || null,
+        };
+      })
+      .addCase(fetchRepositoryJobs.rejected, (state, action) => {
+        const repositoryId = action.payload?.repositoryId || action.meta.arg?.repositoryId;
+        if (!repositoryId) return;
+
+        state.repositoryJobsById[repositoryId] = {
+          ...(state.repositoryJobsById[repositoryId] || {}),
+          status: 'failed',
+          error: action.payload || {
+            code: 'UNKNOWN',
+            message: 'Could not load repository jobs.',
+          },
+        };
       });
   },
 });
@@ -66,5 +122,6 @@ export const selectDashboardStatus = (state) => state.dashboard.status;
 export const selectDashboardError = (state) => state.dashboard.error;
 export const selectAnalyzedRepositories = (state) => state.dashboard.repositories;
 export const selectDashboardSummary = (state) => state.dashboard.summary;
+export const selectRepositoryJobsById = (state) => state.dashboard.repositoryJobsById;
 
 export default dashboardSlice.reducer;

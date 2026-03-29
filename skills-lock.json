@@ -1,10 +1,30 @@
 {
   "version": 1,
   "skills": {
+    "caching": {
+      "source": "yanko-belov/code-craft",
+      "sourceType": "github",
+      "computedHash": "1a75a6ff88b636ea65a95d6d7f954dc19275238b2762736cd9b8e6e48dbdb824"
+    },
+    "emil-design-eng": {
+      "source": "emilkowalski/skill",
+      "sourceType": "github",
+      "computedHash": "ac3fc5b4e206488ffc408a2806f829bb2e5eaf518fded09be34790685c2b3a0d"
+    },
     "frontend-design": {
       "source": "anthropics/skills",
       "sourceType": "github",
       "computedHash": "516bd2154eb843a8240e43d5b285229129853114ad7075a5e141e1c08e408c84"
+    },
+    "redis-best-practices": {
+      "source": "mindrally/skills",
+      "sourceType": "github",
+      "computedHash": "7d5b0f93221b2b0f1f1c35352d06990a9d18226aa95f546b161b10a4fdaabf6b"
+    },
+    "redis-caching-patterns": {
+      "source": "kentoshimizu/sw-agent-skills",
+      "sourceType": "github",
+      "computedHash": "5a20a4d5823ba2dfeccb37c153a405ad879a28e0542ebc71322fe69845dedd40"
     },
     "shadcn": {
       "source": "shadcn/ui",

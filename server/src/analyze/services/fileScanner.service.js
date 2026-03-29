@@ -1,34 +1,21 @@
-import { promises as fs } from 'fs';
-import path from 'path';
+import { ScannerAgent } from '../../agents/scanner/ScannerAgent.js';
 
-const ALLOWED_EXTENSIONS = new Set(['.js', '.ts', '.jsx', '.tsx']);
+const scannerAgent = new ScannerAgent();
 
-export async function scanFiles(rootDir) {
-  const results = [];
+export async function scanRepository(rootDir) {
+  const result = await scannerAgent.process({ extractedPath: rootDir }, { jobId: 'analyze-preview' });
 
-  async function walk(dir) {
-    let entries;
-    try {
-      entries = await fs.readdir(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
-        const skip = ['node_modules', '.git', 'dist', 'build', '.next', 'coverage'];
-        if (!skip.includes(entry.name)) {
-          await walk(path.join(dir, entry.name));
-        }
-      } else if (entry.isFile()) {
-        const ext = path.extname(entry.name).toLowerCase();
-        if (ALLOWED_EXTENSIONS.has(ext)) {
-          results.push(path.join(dir, entry.name));
-        }
-      }
-    }
+  if (result.status === 'failed') {
+    const firstError = result.errors?.[0] || { message: 'Repository scan failed', code: 500 };
+    const err = new Error(firstError.message || 'Repository scan failed');
+    err.statusCode = firstError.code || 500;
+    throw err;
   }
 
-  await walk(rootDir);
-  return results;
+  return result.data;
+}
+
+export async function scanFiles(rootDir) {
+  const scanned = await scanRepository(rootDir);
+  return (scanned.manifest || []).map((item) => item.absolutePath);
 }

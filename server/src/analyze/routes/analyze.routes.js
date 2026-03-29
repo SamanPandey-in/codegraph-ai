@@ -9,6 +9,7 @@ import {
 import {
   analyzeController,
   browseLocalPathController,
+  listAnalysisHistoryController,
   listBranchesController,
   listOwnedReposController,
   localPickerCapabilitiesController,
@@ -28,6 +29,7 @@ const analyzeLimiter = rateLimit({
 
 router.post('/', analyzeLimiter, validateAnalyzeBody, analyzeController);
 router.get('/local/picker-capabilities', analyzeLimiter, localPickerCapabilitiesController);
+router.get('/history', analyzeLimiter, listAnalysisHistoryController);
 router.get('/local/browse', analyzeLimiter, browseLocalPathController);
 router.post('/local/validate', analyzeLimiter, validateLocalPathBody, validateLocalPathController);
 router.post('/github/public/resolve', analyzeLimiter, validatePublicRepoBody, resolvePublicRepoController);
