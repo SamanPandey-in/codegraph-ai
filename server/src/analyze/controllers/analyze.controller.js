@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import path from 'path';
 import { validateLocalRepository } from '../services/analyze.service.js';
 import {
   getLocalPickerCapabilities,
@@ -14,17 +15,81 @@ import {
 import { pgPool } from '../../infrastructure/connections.js';
 import { enqueueAnalysisJob } from '../../queue/analysisQueue.js';
 
-function getAuthUserId(req) {
+const UUID_V4_OR_V1_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function getAuthUser(req) {
   const token = req.cookies?.token || req.headers.authorization?.replace('Bearer ', '');
   if (!token) return null;
   if (!process.env.JWT_SECRET) return null;
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    return decoded?.id || null;
+    return jwt.verify(token, process.env.JWT_SECRET);
   } catch {
     return null;
   }
+}
+
+function isUuid(value) {
+  return UUID_V4_OR_V1_REGEX.test(String(value || ''));
+}
+
+async function resolveDatabaseUserId(authUser) {
+  const authId = String(authUser?.id || '').trim();
+  if (!authId) return null;
+
+  if (isUuid(authId)) {
+    const existing = await pgPool.query(
+      `
+        SELECT id
+        FROM users
+        WHERE id = $1
+        LIMIT 1
+      `,
+      [authId],
+    );
+
+    if (existing.rowCount > 0) return existing.rows[0].id;
+
+    const inserted = await pgPool.query(
+      `
+        INSERT INTO users (id, github_id, username, email, avatar_url)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id
+      `,
+      [
+        authId,
+        null,
+        authUser?.username || 'unknown-user',
+        authUser?.email || null,
+        authUser?.avatar || null,
+      ],
+    );
+
+    return inserted.rows[0]?.id || null;
+  }
+
+  const upserted = await pgPool.query(
+    `
+      INSERT INTO users (github_id, username, email, avatar_url)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (github_id)
+      DO UPDATE
+      SET username = COALESCE(EXCLUDED.username, users.username),
+          email = COALESCE(EXCLUDED.email, users.email),
+          avatar_url = COALESCE(EXCLUDED.avatar_url, users.avatar_url),
+          updated_at = NOW()
+      RETURNING id
+    `,
+    [
+      authId,
+      authUser?.username || `github-${authId}`,
+      authUser?.email || null,
+      authUser?.avatar || null,
+    ],
+  );
+
+  return upserted.rows[0]?.id || null;
 }
 
 function buildRepositoryIdentity(input) {
@@ -63,6 +128,27 @@ function buildRepositoryIdentity(input) {
     defaultBranch: github.branch || null,
     branch: github.branch || null,
   };
+}
+
+function inferRepositoryName({ source, fullName, githubRepo }) {
+  if (githubRepo) return githubRepo;
+  if (!fullName) return source === 'local' ? 'Local repository' : 'Unknown repository';
+
+  if (source === 'local') {
+    const normalized = String(fullName).replace(/\\/g, '/');
+    return path.posix.basename(normalized) || 'Local repository';
+  }
+
+  const parts = String(fullName).split('/').filter(Boolean);
+  return parts[1] || parts[0] || 'Unknown repository';
+}
+
+function inferRepositoryOwner({ source, fullName, githubOwner }) {
+  if (githubOwner) return githubOwner;
+  if (source === 'local') return 'local';
+
+  const parts = String(fullName || '').split('/').filter(Boolean);
+  return parts[0] || 'unknown';
 }
 
 async function createOrGetRepository({ userId, repository }) {
@@ -117,11 +203,18 @@ async function createAnalysisJob({ repositoryId, userId, branch }) {
 
 export async function analyzeController(req, res, next) {
   try {
-    const userId = getAuthUserId(req);
-    if (!userId) {
+    const authUser = getAuthUser(req);
+    if (!authUser?.id) {
       return res.status(401).json({
         error: 'Authentication required to start analysis jobs.',
       });
+    }
+
+    const userId = await resolveDatabaseUserId(authUser);
+    if (!userId) {
+      const err = new Error('Failed to resolve authenticated user record.');
+      err.statusCode = 500;
+      throw err;
     }
 
     const repository = buildRepositoryIdentity(req.body);
@@ -158,6 +251,120 @@ export async function analyzeController(req, res, next) {
     });
 
     return res.status(202).json({ jobId });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function listAnalysisHistoryController(req, res, next) {
+  try {
+    const authUser = getAuthUser(req);
+    if (!authUser?.id) {
+      return res.status(401).json({
+        error: 'Authentication required to load analysis history.',
+      });
+    }
+
+    const requestedUserId = typeof req.query?.userId === 'string' ? req.query.userId.trim() : null;
+    if (requestedUserId && requestedUserId !== String(authUser.id)) {
+      return res.status(403).json({
+        error: 'You can only access your own analysis history.',
+      });
+    }
+
+    const page = Math.max(1, Number.parseInt(req.query?.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, Number.parseInt(req.query?.limit, 10) || 25));
+    const offset = (page - 1) * limit;
+
+    const userId = await resolveDatabaseUserId(authUser);
+    if (!userId) {
+      const err = new Error('Failed to resolve authenticated user record.');
+      err.statusCode = 500;
+      throw err;
+    }
+
+    const [historyResult, countResult] = await Promise.all([
+      pgPool.query(
+        `
+          WITH latest_repo_jobs AS (
+            SELECT DISTINCT ON (r.id)
+              r.id AS repository_id,
+              r.source,
+              r.full_name,
+              r.github_owner,
+              r.github_repo,
+              r.default_branch,
+              aj.id AS job_id,
+              aj.status,
+              aj.branch,
+              aj.node_count,
+              aj.edge_count,
+              COALESCE(aj.completed_at, aj.created_at) AS analyzed_at
+            FROM repositories r
+            JOIN analysis_jobs aj ON aj.repository_id = r.id
+            WHERE r.owner_id = $1
+            ORDER BY r.id, COALESCE(aj.completed_at, aj.created_at) DESC
+          )
+          SELECT *
+          FROM latest_repo_jobs
+          ORDER BY analyzed_at DESC
+          LIMIT $2 OFFSET $3
+        `,
+        [userId, limit, offset],
+      ),
+      pgPool.query(
+        `
+          SELECT COUNT(*)::int AS total
+          FROM repositories r
+          WHERE r.owner_id = $1
+        `,
+        [userId],
+      ),
+    ]);
+
+    const repositories = historyResult.rows.map((row) => {
+      const name = inferRepositoryName({
+        source: row.source,
+        fullName: row.full_name,
+        githubRepo: row.github_repo,
+      });
+      const owner = inferRepositoryOwner({
+        source: row.source,
+        fullName: row.full_name,
+        githubOwner: row.github_owner,
+      });
+
+      return {
+        id: row.repository_id,
+        name,
+        owner,
+        fullName: row.full_name,
+        source: row.source,
+        branch: row.branch || row.default_branch || null,
+        analyzedAt: row.analyzed_at,
+        nodeCount: Number.isFinite(row.node_count) ? row.node_count : null,
+        edgeCount: Number.isFinite(row.edge_count) ? row.edge_count : null,
+        status: row.status || 'completed',
+      };
+    });
+
+    const totalAnalyzed = countResult.rows[0]?.total || 0;
+    const uniqueOwners = new Set(repositories.map((repo) => repo.owner).filter(Boolean)).size;
+
+    return res.status(200).json({
+      repositories,
+      summary: {
+        totalAnalyzed,
+        lastAnalyzedAt: repositories[0]?.analyzedAt || null,
+        uniqueOwners,
+      },
+      pagination: {
+        page,
+        limit,
+        total: totalAnalyzed,
+        totalPages: totalAnalyzed > 0 ? Math.ceil(totalAnalyzed / limit) : 0,
+      },
+    });
   } catch (err) {
     return next(err);
   }
