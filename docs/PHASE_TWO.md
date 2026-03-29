@@ -66,3 +66,5 @@ SupervisorAgent wires agents 1–4 + Persistence; queue/analysisQueue.js runs it
 
 ### Update analyze route + add SSE jobs route - modify
 POST /api/analyze now enqueues job and returns {jobId}; GET /api/jobs/:id/stream emits SSE; GET /api/graph/:jobId loads from DB
+
+## Sprint 2 : Phase 2 AI agents - Enrichment, Embedding, Query and Analysis

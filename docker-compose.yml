@@ -31,7 +31,7 @@ services:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/codegraph
       REDIS_URL: redis://redis:6379
     ports:
-      - "3000:3000"
+      - "5000:5000"
     volumes:
       - ./server:/app
       - /app/node_modules
