@@ -10,7 +10,33 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import dagre from 'dagre';
-import { AiPanel, QueryBar } from '../../ai';
+import { AiPanel } from '../../ai';
+import { selectThemeMode } from '../../theme/slices/themeSlice';
+
+// Fullscreen styles for theme support
+const fullscreenStyles = `
+  #graph-container:fullscreen {
+    background-color: rgb(var(--background));
+    color: rgb(var(--foreground));
+  }
+  #graph-container:fullscreen .reactflow {
+    background-color: transparent;
+  }
+  #graph-container:fullscreen .dark {
+    color-scheme: dark;
+  }
+  .dark #graph-container:fullscreen {
+    background-color: #000000;
+    color: #FFFFFF;
+  }
+`;
+
+// Inject fullscreen styles into document
+if (typeof document !== 'undefined') {
+  const style = document.createElement('style');
+  style.textContent = fullscreenStyles;
+  document.head.appendChild(style);
+}
 import {
   selectNode,
   selectSelectedNodeId,
@@ -18,25 +44,43 @@ import {
 } from '../slices/graphSlice';
 import { selectDeadFiles, selectHighlightedNodeIds } from '../../ai/slices/aiSlice';
 
-const TYPE_COLORS = {
-  component: { bg: '#1A1A1A', border: '#404040' },
-  page:      { bg: '#0B0B0B', border: '#D4AF37' }, // Premium Gold accent for pages
-  hook:      { bg: '#262626', border: '#D4AF37' }, // Premium Gold accent for hooks
-  service:   { bg: '#1A1A1A', border: '#404040' },
-  util:      { bg: '#262626', border: '#404040' },
-  config:    { bg: '#0B0B0B', border: '#666666' },
-  module:    { bg: '#1A1A1A', border: '#404040' },
+const THEME_COLORS = {
+  dark: {
+    component: { bg: '#1A1A1A', border: '#404040' },
+    page:      { bg: '#0B0B0B', border: '#D4AF37' },
+    hook:      { bg: '#262626', border: '#D4AF37' },
+    service:   { bg: '#1A1A1A', border: '#404040' },
+    util:      { bg: '#262626', border: '#404040' },
+    config:    { bg: '#0B0B0B', border: '#666666' },
+    module:    { bg: '#1A1A1A', border: '#404040' },
+  },
+  light: {
+    component: { bg: '#F5F5F5', border: '#BFBFBF' },
+    page:      { bg: '#FFFFFF', border: '#D4AF37' },
+    hook:      { bg: '#F8F8F8', border: '#D4AF37' },
+    service:   { bg: '#F5F5F5', border: '#BFBFBF' },
+    util:      { bg: '#F8F8F8', border: '#BFBFBF' },
+    config:    { bg: '#FFFFFF', border: '#999999' },
+    module:    { bg: '#F5F5F5', border: '#BFBFBF' },
+  },
 };
 
-// Type legend data (map TYPE_COLORS to legend entries)
-const TYPE_LEGEND = Object.entries(TYPE_COLORS).map(([type, { border }]) => [type, border]);
+const THEME_TEXT = {
+  dark: '#E5E5E5',
+  light: '#1A1A1A',
+};
 
-function typeStyle(type) {
-  const { bg, border } = TYPE_COLORS[type] || TYPE_COLORS.module;
+function getTypeColors(theme) {
+  return THEME_COLORS[theme] || THEME_COLORS.dark;
+}
+
+function getTypeStyle(type, theme) {
+  const colors = getTypeColors(theme);
+  const { bg, border } = colors[type] || colors.module;
   return {
     background: bg,
     border: `1px solid ${border}`,
-    color: '#E5E5E5',
+    color: THEME_TEXT[theme],
     borderRadius: 8,
     fontSize: 11,
     padding: '6px 10px',
@@ -62,22 +106,23 @@ function applyDagreLayout(nodes, edges) {
   });
 }
 
-function graphToFlow(graph, highlightedNodeIds, deadFiles) {
+function graphToFlow(graph, highlightedNodeIds, deadFiles, theme = 'dark') {
   const highlightSet = new Set(highlightedNodeIds || []);
   const deadSet = new Set(deadFiles || []);
+  const colors = getTypeColors(theme);
 
   const nodes = Object.entries(graph).map(([file, { type }]) => ({
     id: file,
     data: { label: file },
     position: { x: 0, y: 0 },
     style: {
-      ...typeStyle(type),
+      ...getTypeStyle(type, theme),
       boxShadow: highlightSet.has(file)
         ? '0 0 0 2px rgba(251,191,36,0.95), 0 0 20px rgba(251,191,36,0.45)'
         : undefined,
       border: deadSet.has(file)
         ? '1px dashed rgba(248,113,113,0.9)'
-        : typeStyle(type).border,
+        : getTypeStyle(type, theme).border,
       opacity: deadSet.has(file) ? 0.75 : 1,
     },
   }));
@@ -86,7 +131,7 @@ function graphToFlow(graph, highlightedNodeIds, deadFiles) {
   for (const [source, { deps }] of Object.entries(graph)) {
     for (const target of deps) {
       if (graph[target] !== undefined) {
-        const { border } = TYPE_COLORS[graph[target].type] || TYPE_COLORS.module;
+        const { border } = colors[graph[target].type] || colors.module;
         edges.push({
           id: `${source}>${target}`,
           source,
@@ -107,14 +152,14 @@ export default function GraphView() {
   const selectedNodeId = useSelector(selectSelectedNodeId);
   const highlightedNodeIds = useSelector(selectHighlightedNodeIds);
   const deadFiles = useSelector(selectDeadFiles);
+  const themeMode = useSelector(selectThemeMode);
   const graph = rawData?.graph ?? EMPTY_GRAPH;
-  const jobId = rawData?.jobId;
   const emptyMessage =
     rawData?.message || 'No JS/TS files found in the selected directory.';
 
   const { nodes: initialNodes, edges: initialEdges } = useMemo(
-    () => graphToFlow(graph, highlightedNodeIds, deadFiles),
-    [graph, highlightedNodeIds, deadFiles],
+    () => graphToFlow(graph, highlightedNodeIds, deadFiles, themeMode),
+    [graph, highlightedNodeIds, deadFiles, themeMode],
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
@@ -144,7 +189,7 @@ export default function GraphView() {
   }
 
   return (
-    <div className="relative flex-1 min-h-0">
+    <div id="graph-container" className="relative flex-1 min-h-0">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -156,28 +201,25 @@ export default function GraphView() {
         style={{ background: 'transparent' }}
       >
         <MiniMap
-          nodeColor={(n) => (TYPE_COLORS[graph[n.id]?.type] || TYPE_COLORS.module).border}
+          nodeColor={(n) => {
+            const colors = getTypeColors(themeMode);
+            return (colors[graph[n.id]?.type] || colors.module).border;
+          }}
           maskColor="rgb(var(--background) / 0.7)"
           style={{ background: 'rgb(var(--card))', border: '1px solid rgb(var(--border) / 0.1)' }}
         />
         <Controls />
         <Background color="rgb(var(--foreground) / 0.05)" gap={20} />
 
-        {/* Query Bar Panel */}
-        <div className="absolute top-3 left-3 z-10 w-96 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-lg p-0">
-          <QueryBar jobId={jobId} />
-        </div>
-
-        {/* Type Legend */}
         <div className="absolute bottom-14 left-3 z-10 rounded-lg border border-border bg-card/90 backdrop-blur-sm p-3 text-[11px] shadow-lg">
-          {TYPE_LEGEND.map(([type, color]) => (
+          {Object.entries(getTypeColors(themeMode)).map(([type, { border }]) => (
             <div key={type} className="flex items-center gap-2 mb-1 last:mb-0">
-              <span className="inline-block size-2.5 rounded-sm shrink-0" style={{ background: color }} />
+              <span className="inline-block size-2.5 rounded-sm shrink-0" style={{ background: border }} />
               <span className="text-muted-foreground capitalize">{type}</span>
             </div>
           ))}
         </div>
-      </ReactFlow>      
+      </ReactFlow>
 
       <AiPanel
         nodeId={selectedNodeId}

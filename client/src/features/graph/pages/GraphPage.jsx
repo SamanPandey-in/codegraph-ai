@@ -11,6 +11,7 @@ import {
   selectGraphError,
   selectGraphStatus,
 } from '../slices/graphSlice';
+import { QueryBar } from '../../ai';
 
 function toFiniteNumber(value) {
   const numberValue = Number(value);
@@ -85,9 +86,18 @@ export default function GraphPage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-6.75rem)] flex-col">
-      <GraphToolbar />
-      <GraphView />
+    <div className="flex h-[calc(100vh-6.75rem)] flex-col gap-0.5">
+      {status === 'succeeded' && data && (
+        <section className="mx-auto mt-6 h-[calc(100vh-10rem)] w-full max-w-[1500px] px-4 pb-4">
+          <div className="mb-3 rounded-xl border border-border bg-card/80 p-2 shadow-sm">
+            <QueryBar jobId={data?.jobId || job?.jobId} />
+          </div>
+          <div className="flex h-[calc(100%-4.5rem)] flex-col overflow-hidden rounded-xl border border-border/60 bg-card/40">
+            <GraphToolbar />
+            <GraphView />
+          </div>
+        </section>
+      )}
     </div>
   );
 }
