@@ -86,3 +86,30 @@ Pure computation; dead code = inDegree 0 nodes (minus entry points); impact = BF
 
 ### Add /api/ai/* routes + register in app.js - new
 POST /api/ai/query → QueryAgent; POST /api/ai/impact → AnalysisAgent; rate limiter on all AI routes
+
+## Why Phase 2 features are Agents 5–9, not a separate layer: 
+
+If you wrote EnrichmentAgent as a standalone POST endpoint (as the Phase 2 guide originally described), you'd have two code paths for the same job: the parsing pipeline and the AI enrichment. They'd share no state, no retry logic, no confidence scoring, and no audit trail. Making enrichment an agent means the Supervisor automatically handles "OpenAI is rate-limiting right now" without crashing the whole job — it degrades gracefully and still returns the graph.
+
+## Sprint 3 : Client Phase 2 UI - panels, query bar, highlights
+
+### Create JobProgressBar component - client
+client/src/features/jobs/ — consumes SSE stream; shows per-agent confidence pills; replaces loading spinner
+
+### Update graphSlice to load from /api/graph/:jobId - modify
+analyzeCodebase thunk now polls job status via SSE, then fetches graph from DB once completed
+
+### Create aiSlice.js + aiService.js - client
+client/src/features/ai/slices/ and services/ — explainNode, queryGraph, analyzeImpact thunks; add aiReducer to store
+
+### Create AiPanel component - client
+Replaces NodeDetail in GraphView; shows declarations, AI explanation, impact analysis, deps/usedBy
+
+### Create QueryBar component - client
+NLQ input with ask button; shows answer + "highlighting N files" feedback; clear button resets highlights
+
+### Update GraphView for highlights + dead code + AiPanel - modify
+Import highlightedNodeIds + deadFiles from aiSlice; pass to graphToFlow; swap NodeDetail → AiPanel
+
+### Wire QueryBar + JobProgressBar into AnalyzePage - modify
+QueryBar above ReactFlow canvas; JobProgressBar replaces the loading spinner during analysis

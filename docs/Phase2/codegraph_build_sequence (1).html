@@ -1,0 +1,143 @@
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans);color:var(--color-text-primary)}
+.sprint{border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);margin-bottom:12px;overflow:hidden}
+.sprint-header{display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;background:var(--color-background-secondary);user-select:none}
+.sprint-header:hover{background:var(--color-background-tertiary)}
+.sprint-badge{font-size:11px;font-weight:500;padding:2px 8px;border-radius:20px;white-space:nowrap}
+.s1 .sprint-badge{background:var(--color-background-info);color:var(--color-text-info)}
+.s2 .sprint-badge{background:#EEEDFE;color:#534AB7}
+.s3 .sprint-badge{background:var(--color-background-success);color:var(--color-text-success)}
+.s4 .sprint-badge{background:#FAEEDA;color:#854F0B}
+.sprint-title{font-size:14px;font-weight:500;flex:1}
+.sprint-meta{font-size:12px;color:var(--color-text-secondary)}
+.sprint-progress{font-size:12px;font-weight:500;min-width:36px;text-align:right}
+.sprint-body{padding:4px 0;display:none}
+.sprint.open .sprint-body{display:block}
+.step{display:flex;align-items:flex-start;gap:10px;padding:8px 16px;border-top:0.5px solid var(--color-border-tertiary)}
+.step:first-child{border-top:none}
+.step input[type=checkbox]{margin-top:2px;flex-shrink:0;width:14px;height:14px;cursor:pointer;accent-color:var(--color-text-info)}
+.step.done .step-label{text-decoration:line-through;color:var(--color-text-tertiary)}
+.step-label{font-size:13px;line-height:1.4}
+.step-sub{font-size:11px;color:var(--color-text-tertiary);margin-top:2px}
+.step-tag{display:inline-block;font-size:10px;padding:1px 6px;border-radius:4px;margin-left:6px;vertical-align:middle;font-weight:500}
+.tag-new{background:var(--color-background-success);color:var(--color-text-success)}
+.tag-mod{background:var(--color-background-warning);color:var(--color-text-warning)}
+.tag-del{background:var(--color-background-danger);color:var(--color-text-danger)}
+.tag-client{background:var(--color-background-info);color:var(--color-text-info)}
+.progress-bar{height:3px;background:var(--color-border-tertiary);margin:0}
+.progress-fill{height:100%;transition:width 0.3s;border-radius:0}
+.s1 .progress-fill{background:#378ADD}
+.s2 .progress-fill{background:#7F77DD}
+.s3 .progress-fill{background:#1D9E75}
+.s4 .progress-fill{background:#BA7517}
+.total-bar{display:flex;align-items:center;gap:10px;padding:12px 0;font-size:13px;color:var(--color-text-secondary)}
+.total-fill{flex:1;height:4px;background:var(--color-border-tertiary);border-radius:2px;overflow:hidden}
+.total-inner{height:100%;background:var(--color-text-info);transition:width 0.3s;border-radius:2px}
+.chevron{font-size:10px;transition:transform 0.2s;color:var(--color-text-tertiary)}
+.sprint.open .chevron{transform:rotate(90deg)}
+</style>
+
+<div class="total-bar">
+  <span id="total-label">0 / 28 steps done</span>
+  <div class="total-fill"><div class="total-inner" id="total-inner" style="width:0%"></div></div>
+</div>
+
+<div class="sprint s1 open" id="sprint-1">
+  <div class="sprint-header" onclick="toggle('sprint-1')">
+    <span class="sprint-badge">Sprint 1 · ~2 days</span>
+    <span class="sprint-title">Infrastructure foundation — replace the monolith with agents</span>
+    <span class="sprint-progress" id="prog-1">0/12</span>
+    <span class="chevron">▶</span>
+  </div>
+  <div class="progress-bar"><div class="progress-fill" id="bar-1" style="width:0%"></div></div>
+  <div class="sprint-body">
+    <div class="step" id="step-1-1"><input type="checkbox" onchange="tick(this,'1','1')"><div><div class="step-label">Install server deps<span class="step-tag tag-new">new</span></div><div class="step-sub">npm install pg ioredis bullmq openai @pgvector/pg</div></div></div>
+    <div class="step" id="step-1-2"><input type="checkbox" onchange="tick(this,'1','2')"><div><div class="step-label">Create DB schema + run migration<span class="step-tag tag-new">new</span></div><div class="step-sub">server/src/infrastructure/migrations/001_initial.sql → users, repositories, analysis_jobs, graph_nodes, graph_edges, file_embeddings, agent_audit_log</div></div></div>
+    <div class="step" id="step-1-3"><input type="checkbox" onchange="tick(this,'1','3')"><div><div class="step-label">Create infrastructure/connections.js<span class="step-tag tag-new">new</span></div><div class="step-sub">pg Pool + ioredis client, both exported as singletons</div></div></div>
+    <div class="step" id="step-1-4"><input type="checkbox" onchange="tick(this,'1','4')"><div><div class="step-label">Create BaseAgent + confidence.js<span class="step-tag tag-new">new</span></div><div class="step-sub">server/src/agents/core/ — buildResult(), scoring formulas per agent</div></div></div>
+    <div class="step" id="step-1-5"><input type="checkbox" onchange="tick(this,'1','5')"><div><div class="step-label">Create AuditLogger + JobStatusEmitter<span class="step-tag tag-new">new</span></div><div class="step-sub">AuditLogger writes to agent_audit_log; Emitter does Redis pub/sub for SSE</div></div></div>
+    <div class="step" id="step-1-6"><input type="checkbox" onchange="tick(this,'1','6')"><div><div class="step-label">Extract IngestionAgent from analyze.service.js<span class="step-tag tag-mod">refactor</span></div><div class="step-sub">Move _handleGitHub + _handleLocal into agent class; keep original file temporarily</div></div></div>
+    <div class="step" id="step-1-7"><input type="checkbox" onchange="tick(this,'1','7')"><div><div class="step-label">Extract ScannerAgent from fileScanner.service.js<span class="step-tag tag-mod">refactor</span></div><div class="step-sub">Wrap scanFiles() in agent class; add monorepo detection + language breakdown</div></div></div>
+    <div class="step" id="step-1-8"><input type="checkbox" onchange="tick(this,'1','8')"><div><div class="step-label">Extract ParserAgent from astParser.service.js + add worker thread<span class="step-tag tag-mod">refactor</span></div><div class="step-sub">Move parse logic to parseWorker.js (worker_threads); ParserAgent spawns pool; also add declarations extraction here</div></div></div>
+    <div class="step" id="step-1-9"><input type="checkbox" onchange="tick(this,'1','9')"><div><div class="step-label">Extract GraphBuilderAgent from astParser.service.js<span class="step-tag tag-mod">refactor</span></div><div class="step-sub">buildDependencyGraph() becomes GraphBuilderAgent; add Tarjan cycle detection + in/out-degree</div></div></div>
+    <div class="step" id="step-1-10"><input type="checkbox" onchange="tick(this,'1','10')"><div><div class="step-label">Create PersistenceAgent<span class="step-tag tag-new">new</span></div><div class="step-sub">Writes nodes + edges to Postgres using unnest() bulk insert; single transaction with savepoints</div></div></div>
+    <div class="step" id="step-1-11"><input type="checkbox" onchange="tick(this,'1','11')"><div><div class="step-label">Create SupervisorAgent + BullMQ queue<span class="step-tag tag-new">new</span></div><div class="step-sub">SupervisorAgent wires agents 1–4 + Persistence; queue/analysisQueue.js runs it as async worker</div></div></div>
+    <div class="step" id="step-1-12"><input type="checkbox" onchange="tick(this,'1','12')"><div><div class="step-label">Update analyze route + add SSE jobs route<span class="step-tag tag-mod">modify</span></div><div class="step-sub">POST /api/analyze now enqueues job and returns {jobId}; GET /api/jobs/:id/stream emits SSE; GET /api/graph/:jobId loads from DB</div></div></div>
+  </div>
+</div>
+
+<div class="sprint s2" id="sprint-2">
+  <div class="sprint-header" onclick="toggle('sprint-2')">
+    <span class="sprint-badge">Sprint 2 · ~2 days</span>
+    <span class="sprint-title">Phase 2 AI agents — Enrichment, Embedding, Query, Analysis</span>
+    <span class="sprint-progress" id="prog-2">0/6</span>
+    <span class="chevron">▶</span>
+  </div>
+  <div class="progress-bar"><div class="progress-fill" id="bar-2" style="width:0%"></div></div>
+  <div class="sprint-body">
+    <div class="step" id="step-2-1"><input type="checkbox" onchange="tick(this,'2','1')"><div><div class="step-label">Create EnrichmentAgent (AI file summaries)<span class="step-tag tag-new">new</span></div><div class="step-sub">Files &lt;50 lines get cheap heuristic summary; larger files hit GPT-4o-mini; results cached in Redis</div></div></div>
+    <div class="step" id="step-2-2"><input type="checkbox" onchange="tick(this,'2','2')"><div><div class="step-label">Create EmbeddingAgent<span class="step-tag tag-new">new</span></div><div class="step-sub">text-embedding-3-small; batches of 100; stores vectors in file_embeddings via pgvector</div></div></div>
+    <div class="step" id="step-2-3"><input type="checkbox" onchange="tick(this,'2','3')"><div><div class="step-label">Wire agents 5+6 into SupervisorAgent pipeline<span class="step-tag tag-mod">modify</span></div><div class="step-sub">Add Enrichment + Embedding stages after GraphBuilder; both are non-fatal (abortOnCritical: false)</div></div></div>
+    <div class="step" id="step-2-4"><input type="checkbox" onchange="tick(this,'2','4')"><div><div class="step-label">Create QueryAgent (on-demand NLQ)<span class="step-tag tag-new">new</span></div><div class="step-sub">Embeds question → pgvector cosine search → keyword rerank → LLM with top-8 files; saves to saved_queries</div></div></div>
+    <div class="step" id="step-2-5"><input type="checkbox" onchange="tick(this,'2','5')"><div><div class="step-label">Create AnalysisAgent (dead code + impact)<span class="step-tag tag-new">new</span></div><div class="step-sub">Pure computation; dead code = inDegree 0 nodes (minus entry points); impact = BFS on reverse adjacency</div></div></div>
+    <div class="step" id="step-2-6"><input type="checkbox" onchange="tick(this,'2','6')"><div><div class="step-label">Add /api/ai/* routes + register in app.js<span class="step-tag tag-new">new</span></div><div class="step-sub">POST /api/ai/query → QueryAgent; POST /api/ai/impact → AnalysisAgent; rate limiter on all AI routes</div></div></div>
+  </div>
+</div>
+
+<div class="sprint s3" id="sprint-3">
+  <div class="sprint-header" onclick="toggle('sprint-3')">
+    <span class="sprint-badge">Sprint 3 · ~1.5 days</span>
+    <span class="sprint-title">Client Phase 2 UI — panels, query bar, highlights</span>
+    <span class="sprint-progress" id="prog-3">0/7</span>
+    <span class="chevron">▶</span>
+  </div>
+  <div class="progress-bar"><div class="progress-fill" id="bar-3" style="width:0%"></div></div>
+  <div class="sprint-body">
+    <div class="step" id="step-3-1"><input type="checkbox" onchange="tick(this,'3','1')"><div><div class="step-label">Create JobProgressBar component<span class="step-tag tag-client">client</span></div><div class="step-sub">client/src/features/jobs/ — consumes SSE stream; shows per-agent confidence pills; replaces loading spinner</div></div></div>
+    <div class="step" id="step-3-2"><input type="checkbox" onchange="tick(this,'3','2')"><div><div class="step-label">Update graphSlice to load from /api/graph/:jobId<span class="step-tag tag-mod">modify</span></div><div class="step-sub">analyzeCodebase thunk now polls job status via SSE, then fetches graph from DB once completed</div></div></div>
+    <div class="step" id="step-3-3"><input type="checkbox" onchange="tick(this,'3','3')"><div><div class="step-label">Create aiSlice.js + aiService.js<span class="step-tag tag-client">client</span></div><div class="step-sub">client/src/features/ai/slices/ and services/ — explainNode, queryGraph, analyzeImpact thunks; add aiReducer to store</div></div></div>
+    <div class="step" id="step-3-4"><input type="checkbox" onchange="tick(this,'3','4')"><div><div class="step-label">Create AiPanel component<span class="step-tag tag-client">client</span></div><div class="step-sub">Replaces NodeDetail in GraphView; shows declarations, AI explanation, impact analysis, deps/usedBy</div></div></div>
+    <div class="step" id="step-3-5"><input type="checkbox" onchange="tick(this,'3','5')"><div><div class="step-label">Create QueryBar component<span class="step-tag tag-client">client</span></div><div class="step-sub">NLQ input with ask button; shows answer + "highlighting N files" feedback; clear button resets highlights</div></div></div>
+    <div class="step" id="step-3-6"><input type="checkbox" onchange="tick(this,'3','6')"><div><div class="step-label">Update GraphView for highlights + dead code + AiPanel<span class="step-tag tag-mod">modify</span></div><div class="step-sub">Import highlightedNodeIds + deadFiles from aiSlice; pass to graphToFlow; swap NodeDetail → AiPanel</div></div></div>
+    <div class="step" id="step-3-7"><input type="checkbox" onchange="tick(this,'3','7')"><div><div class="step-label">Wire QueryBar + JobProgressBar into AnalyzePage<span class="step-tag tag-mod">modify</span></div><div class="step-sub">QueryBar above ReactFlow canvas; JobProgressBar replaces the loading spinner during analysis</div></div></div>
+  </div>
+</div>
+
+<div class="sprint s4" id="sprint-4">
+  <div class="sprint-header" onclick="toggle('sprint-4')">
+    <span class="sprint-badge">Sprint 4 · ~1 day</span>
+    <span class="sprint-title">Data layer — user history, saved repos, quick re-scan</span>
+    <span class="sprint-progress" id="prog-4">0/3</span>
+    <span class="chevron">▶</span>
+  </div>
+  <div class="progress-bar"><div class="progress-fill" id="bar-4" style="width:0%"></div></div>
+  <div class="sprint-body">
+    <div class="step" id="step-4-1"><input type="checkbox" onchange="tick(this,'4','1')"><div><div class="step-label">GET /api/repositories — user's scanned repo list<span class="step-tag tag-new">new</span></div><div class="step-sub">Returns repositories rows for current user; includes last_scanned_at, scan_count, last job confidence</div></div></div>
+    <div class="step" id="step-4-2"><input type="checkbox" onchange="tick(this,'4','2')"><div><div class="step-label">GET /api/repositories/:id/jobs — job history<span class="step-tag tag-new">new</span></div><div class="step-sub">Lists all analysis_jobs for a repo; user can click to restore any previous graph from DB</div></div></div>
+    <div class="step" id="step-4-3"><input type="checkbox" onchange="tick(this,'4','3')"><div><div class="step-label">Update Dashboard to show repo history + quick re-analyze<span class="step-tag tag-mod">modify</span></div><div class="step-sub">DashboardPage shows previously scanned repos from DB; "Re-analyze" button skips repo picker and enqueues directly</div></div></div>
+  </div>
+</div>
+
+<script>
+const counts = {1:12, 2:6, 3:7, 4:3};
+const done = {1:0, 2:0, 3:0, 4:0};
+const total = 28;
+let totalDone = 0;
+
+function tick(cb, sprint, step) {
+  const el = document.getElementById('step-'+sprint+'-'+step);
+  if(cb.checked) { el.classList.add('done'); done[sprint]++; totalDone++; }
+  else { el.classList.remove('done'); done[sprint]--; totalDone--; }
+  const pct = Math.round(done[sprint]/counts[sprint]*100);
+  document.getElementById('bar-'+sprint).style.width = pct+'%';
+  document.getElementById('prog-'+sprint).textContent = done[sprint]+'/'+counts[sprint];
+  const tpct = Math.round(totalDone/total*100);
+  document.getElementById('total-inner').style.width = tpct+'%';
+  document.getElementById('total-label').textContent = totalDone+' / '+total+' steps done';
+}
+
+function toggle(id) {
+  document.getElementById(id).classList.toggle('open');
+}
+</script>
