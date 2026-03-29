@@ -7,6 +7,17 @@ function toJson(value, fallback) {
   return JSON.stringify(value);
 }
 
+function toVectorLiteral(embedding) {
+  if (!Array.isArray(embedding) || embedding.length === 0) return null;
+
+  const normalized = embedding
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value));
+
+  if (normalized.length === 0) return null;
+  return `[${normalized.join(',')}]`;
+}
+
 export class PersistenceAgent extends BaseAgent {
   agentId = 'persistence-agent';
   maxRetries = 1;
@@ -25,6 +36,7 @@ export class PersistenceAgent extends BaseAgent {
     const jobId = input?.jobId || context?.jobId;
     const graph = input?.graph || {};
     const edges = Array.isArray(input?.edges) ? input.edges : [];
+    const embeddings = input?.embeddings || {};
     const enriched = input?.enriched || {};
     const topology = input?.topology || {};
 
@@ -72,7 +84,18 @@ export class PersistenceAgent extends BaseAgent {
       edgeTypes.push(edge.type || 'import');
     }
 
-    const recordsAttempted = nodePaths.length + edgeSourcePaths.length;
+    const embeddingPaths = [];
+    const embeddingVectors = [];
+
+    for (const [filePath, vector] of Object.entries(embeddings)) {
+      const vectorLiteral = toVectorLiteral(vector);
+      if (!vectorLiteral) continue;
+
+      embeddingPaths.push(filePath);
+      embeddingVectors.push(vectorLiteral);
+    }
+
+    const recordsAttempted = nodePaths.length + edgeSourcePaths.length + embeddingPaths.length;
     let recordsWritten = 0;
 
     let client;
@@ -147,6 +170,29 @@ export class PersistenceAgent extends BaseAgent {
       }
 
       await client.query('SAVEPOINT after_edges');
+
+      if (embeddingPaths.length > 0) {
+        const embeddingResult = await client.query(
+          `
+            INSERT INTO file_embeddings (
+              job_id,
+              file_path,
+              embedding
+            )
+            SELECT
+              $1,
+              t.file_path,
+              t.embedding::vector
+            FROM unnest($2::text[], $3::text[]) AS t(file_path, embedding)
+            ON CONFLICT (job_id, file_path) DO UPDATE
+            SET embedding = EXCLUDED.embedding
+          `,
+          [jobId, embeddingPaths, embeddingVectors],
+        );
+
+        recordsWritten += embeddingResult.rowCount || 0;
+      }
+
       await client.query('COMMIT');
 
       const confidence = scorePersistence({
@@ -162,6 +208,7 @@ export class PersistenceAgent extends BaseAgent {
           written: {
             nodes: nodePaths.length,
             edges: edgeSourcePaths.length,
+            embeddings: embeddingPaths.length,
           },
           durationMs: Date.now() - start,
         },

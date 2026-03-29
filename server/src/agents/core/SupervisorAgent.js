@@ -2,6 +2,7 @@ import { IngestionAgent } from '../ingestion/IngestionAgent.js';
 import { ScannerAgent } from '../scanner/ScannerAgent.js';
 import { ParserAgent } from '../parser/ParserAgent.js';
 import { GraphBuilderAgent } from '../graph/GraphBuilderAgent.js';
+import { EmbeddingAgent } from '../embedding/EmbeddingAgent.js';
 import { PersistenceAgent } from '../persistence/PersistenceAgent.js';
 import { AuditLogger } from './AuditLogger.js';
 import { JobStatusEmitter } from './JobStatusEmitter.js';
@@ -20,6 +21,7 @@ export class SupervisorAgent {
       scanner: new ScannerAgent(),
       parser: new ParserAgent(),
       graphBuilder: new GraphBuilderAgent(),
+      embedding: new EmbeddingAgent(),
       persistence: new PersistenceAgent({ db }),
     };
   }
@@ -67,6 +69,20 @@ export class SupervisorAgent {
       if (graphResult.status === 'failed') return this._abort(jobId, graphResult, agentTrace);
       Object.assign(pipelineData, graphResult.data);
 
+      await this._updateJobStatus(jobId, 'embedding');
+      const embeddingResult = await this._runWithSupervision(
+        this.agents.embedding,
+        {
+          graph: pipelineData.graph,
+          enriched: pipelineData.enriched,
+          jobId,
+        },
+        context,
+      );
+      agentTrace.push(embeddingResult);
+      if (embeddingResult.status === 'failed') return this._abort(jobId, embeddingResult, agentTrace);
+      Object.assign(pipelineData, embeddingResult.data);
+
       await this._updateJobStatus(jobId, 'persisting');
       const persistenceResult = await this._runWithSupervision(
         this.agents.persistence,
@@ -75,6 +91,7 @@ export class SupervisorAgent {
           repositoryId: input?.repositoryId,
           graph: pipelineData.graph,
           edges: pipelineData.edges,
+          embeddings: pipelineData.embeddings,
           topology: pipelineData.topology,
         },
         context,
