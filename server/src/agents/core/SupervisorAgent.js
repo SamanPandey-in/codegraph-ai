@@ -2,6 +2,7 @@ import { IngestionAgent } from '../ingestion/IngestionAgent.js';
 import { ScannerAgent } from '../scanner/ScannerAgent.js';
 import { ParserAgent } from '../parser/ParserAgent.js';
 import { GraphBuilderAgent } from '../graph/GraphBuilderAgent.js';
+import { EnrichmentAgent } from '../enrichment/EnrichmentAgent.js';
 import { EmbeddingAgent } from '../embedding/EmbeddingAgent.js';
 import { PersistenceAgent } from '../persistence/PersistenceAgent.js';
 import { AuditLogger } from './AuditLogger.js';
@@ -21,6 +22,7 @@ export class SupervisorAgent {
       scanner: new ScannerAgent(),
       parser: new ParserAgent(),
       graphBuilder: new GraphBuilderAgent(),
+      enrichment: new EnrichmentAgent(),
       embedding: new EmbeddingAgent(),
       persistence: new PersistenceAgent({ db }),
     };
@@ -69,6 +71,19 @@ export class SupervisorAgent {
       if (graphResult.status === 'failed') return this._abort(jobId, graphResult, agentTrace);
       Object.assign(pipelineData, graphResult.data);
 
+      await this._updateJobStatus(jobId, 'enriching');
+      const enrichmentResult = await this._runWithSupervision(
+        this.agents.enrichment,
+        {
+          graph: pipelineData.graph,
+          extractedPath: pipelineData.extractedPath,
+        },
+        context,
+        { abortOnCritical: false },
+      );
+      agentTrace.push(enrichmentResult);
+      Object.assign(pipelineData, enrichmentResult.data);
+
       await this._updateJobStatus(jobId, 'embedding');
       const embeddingResult = await this._runWithSupervision(
         this.agents.embedding,
@@ -78,9 +93,9 @@ export class SupervisorAgent {
           jobId,
         },
         context,
+        { abortOnCritical: false },
       );
       agentTrace.push(embeddingResult);
-      if (embeddingResult.status === 'failed') return this._abort(jobId, embeddingResult, agentTrace);
       Object.assign(pipelineData, embeddingResult.data);
 
       await this._updateJobStatus(jobId, 'persisting');
@@ -124,7 +139,7 @@ export class SupervisorAgent {
     }
   }
 
-  async _runWithSupervision(agent, input, context) {
+  async _runWithSupervision(agent, input, context, opts = { abortOnCritical: true }) {
     let attempt = 0;
     let lastResult;
 
@@ -154,7 +169,12 @@ export class SupervisorAgent {
         continue;
       }
 
-      result.status = 'failed';
+      if (opts.abortOnCritical) {
+        result.status = 'failed';
+      } else {
+        result.status = 'partial';
+        result.warnings = [...(result.warnings || []), 'Critically low confidence; proceeding in degraded mode'];
+      }
       return result;
     }
 
