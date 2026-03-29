@@ -68,3 +68,21 @@ SupervisorAgent wires agents 1–4 + Persistence; queue/analysisQueue.js runs it
 POST /api/analyze now enqueues job and returns {jobId}; GET /api/jobs/:id/stream emits SSE; GET /api/graph/:jobId loads from DB
 
 ## Sprint 2 : Phase 2 AI agents - Enrichment, Embedding, Query and Analysis
+
+### Create EnrichmentAgent (AI file summaries) - new
+Files <50 lines get cheap heuristic summary; larger files hit GPT-4o-mini; results cached in Redis
+
+### Create EmbeddingAgent - new
+text-embedding-3-small; batches of 100; stores vectors in file_embeddings via pgvector
+
+### Wire agents 5+6 into SupervisorAgent pipeline - modify
+Add Enrichment + Embedding stages after GraphBuilder; both are non-fatal (abortOnCritical: false)
+
+### Create QueryAgent (on-demand NLQ) - new
+Embeds question → pgvector cosine search → keyword rerank → LLM with top-8 files; saves to saved_queries
+
+### Create AnalysisAgent (dead code + impact) - new
+Pure computation; dead code = inDegree 0 nodes (minus entry points); impact = BFS on reverse adjacency
+
+### Add /api/ai/* routes + register in app.js - new
+POST /api/ai/query → QueryAgent; POST /api/ai/impact → AnalysisAgent; rate limiter on all AI routes
