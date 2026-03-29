@@ -631,11 +631,7 @@ export default function DashboardPage() {
                           <Button size="sm" variant="outline" asChild>
                             <Link to={graphLink.to} state={graphLink.state}>Open graph</Link>
                           </Button>
-                        ) : (
-                          <Button type="button" size="sm" variant="outline" disabled>
-                            Graph unavailable
-                          </Button>
-                        )}
+                        ) : null}
                       </div>
 
                       {expandedRepos[repo.id] ? (

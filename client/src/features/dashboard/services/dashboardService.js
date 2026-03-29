@@ -1,11 +1,9 @@
 import axios from 'axios';
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL
-  ? `${import.meta.env.VITE_API_BASE_URL}/api`
-  : 'http://localhost:5000/api';
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
 
 const dashboardClient = axios.create({
-  baseURL: BASE_URL,
+  baseURL: apiBaseUrl,
   withCredentials: true,
   headers: { 'Content-Type': 'application/json' },
 });
@@ -103,7 +101,7 @@ const normalizePayload = (payload) => {
 
 export const dashboardService = {
   async getAnalyzedRepositories({ userId, page = 1, limit = 25 } = {}) {
-    const { data } = await dashboardClient.get('/repositories', {
+    const { data } = await dashboardClient.get('/api/repositories', {
       params: {
         page,
         limit,
@@ -114,7 +112,7 @@ export const dashboardService = {
   },
 
   async getRepositoryJobs({ repositoryId, page = 1, limit = 20 } = {}) {
-    const { data } = await dashboardClient.get(`/repositories/${repositoryId}/jobs`, {
+    const { data } = await dashboardClient.get(`/api/repositories/${repositoryId}/jobs`, {
       params: { page, limit },
     });
 
