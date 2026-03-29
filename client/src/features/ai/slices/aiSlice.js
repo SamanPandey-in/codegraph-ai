@@ -125,5 +125,12 @@ export const { resetAiState } = aiSlice.actions;
 export const selectAiQueryState = (state) => state.ai.query;
 export const selectAiExplainState = (state) => state.ai.explain;
 export const selectAiImpactState = (state) => state.ai.impact;
+export const selectHighlightedNodeIds = (state) => {
+  const queryHighlights = state.ai?.query?.data?.highlightedFiles || [];
+  const impactHighlights = state.ai?.impact?.data?.affectedFiles || [];
+  return Array.from(new Set([...queryHighlights, ...impactHighlights]));
+};
+export const selectDeadFiles = (state) =>
+  state.graph?.data?.topology?.deadCodeCandidates || [];
 
 export default aiSlice.reducer;

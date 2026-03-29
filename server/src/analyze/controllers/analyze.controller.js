@@ -12,7 +12,14 @@ import {
   parseGitHubRepoUrl,
   resolvePublicRepository,
 } from '../services/githubApi.service.js';
-import { pgPool } from '../../infrastructure/connections.js';
+import { pgPool, redisClient } from '../../infrastructure/connections.js';
+import {
+  buildAnalysisHistoryCacheKey,
+  cacheTtl,
+  invalidateAnalysisHistoryCacheForUser,
+  readJsonCache,
+  writeJsonCache,
+} from '../../infrastructure/cache.js';
 import { enqueueAnalysisJob } from '../../queue/analysisQueue.js';
 
 const UUID_V4_OR_V1_REGEX =
@@ -75,7 +82,7 @@ async function resolveDatabaseUserId(authUser) {
       VALUES ($1, $2, $3, $4)
       ON CONFLICT (github_id)
       DO UPDATE
-      SET username = COALESCE(EXCLUDED.username, users.username),
+            ORDER BY r.id, COALESCE(aj.completed_at, aj.created_at) DESC
           email = COALESCE(EXCLUDED.email, users.email),
           avatar_url = COALESCE(EXCLUDED.avatar_url, users.avatar_url),
           updated_at = NOW()
@@ -250,6 +257,8 @@ export async function analyzeController(req, res, next) {
       input: queueInput,
     });
 
+    await invalidateAnalysisHistoryCacheForUser(redisClient, userId);
+
     return res.status(202).json({ jobId });
   } catch (err) {
     return next(err);
@@ -281,6 +290,12 @@ export async function listAnalysisHistoryController(req, res, next) {
       const err = new Error('Failed to resolve authenticated user record.');
       err.statusCode = 500;
       throw err;
+    }
+        
+    const historyCacheKey = buildAnalysisHistoryCacheKey({ userId, page, limit });
+    const cachedHistory = await readJsonCache(redisClient, historyCacheKey);
+    if (cachedHistory) {
+      return res.status(200).json(cachedHistory);
     }
 
     const [historyResult, countResult] = await Promise.all([
@@ -362,7 +377,7 @@ export async function listAnalysisHistoryController(req, res, next) {
     const totalAnalyzed = countResult.rows[0]?.total || 0;
     const uniqueOwners = new Set(repositories.map((repo) => repo.owner).filter(Boolean)).size;
 
-    return res.status(200).json({
+    const responsePayload = {
       repositories,
       summary: {
         totalAnalyzed,
@@ -375,7 +390,16 @@ export async function listAnalysisHistoryController(req, res, next) {
         total: totalAnalyzed,
         totalPages: totalAnalyzed > 0 ? Math.ceil(totalAnalyzed / limit) : 0,
       },
-    });
+    };
+
+    await writeJsonCache(
+      redisClient,
+      historyCacheKey,
+      responsePayload,
+      cacheTtl.analysisHistorySeconds,
+    );
+
+    return res.status(200).json(responsePayload);
   } catch (err) {
     return next(err);
   }
