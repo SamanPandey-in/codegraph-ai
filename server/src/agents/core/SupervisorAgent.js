@@ -12,6 +12,7 @@ import {
   buildGraphCacheKey,
   deleteCacheKey,
   invalidateAnalysisHistoryCacheForUser,
+  invalidateRepositoriesCacheForUser,
 } from '../../infrastructure/cache.js';
 
 export class SupervisorAgent {
@@ -307,6 +308,7 @@ export class SupervisorAgent {
       const userId = jobResult.rows?.[0]?.user_id;
       if (userId) {
         await invalidateAnalysisHistoryCacheForUser(this.redis, userId);
+        await invalidateRepositoriesCacheForUser(this.redis, userId);
       }
     } catch (error) {
       console.error('[SupervisorAgent] Failed to invalidate Redis caches:', error.message);

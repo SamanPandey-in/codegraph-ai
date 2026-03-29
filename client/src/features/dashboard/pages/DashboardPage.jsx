@@ -6,12 +6,15 @@ import {
   GitBranch,
   Zap,
   ArrowRight,
-  Terminal,
   Database,
   RefreshCw,
   Clock3,
   FolderGit2,
   Search,
+  History,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,8 +36,10 @@ import {
 import { useAuth } from '@/features/auth/context/AuthContext';
 import {
   fetchAnalyzedRepositories,
+  fetchRepositoryJobs,
   selectAnalyzedRepositories,
   selectDashboardError,
+  selectRepositoryJobsById,
   selectDashboardStatus,
   selectDashboardSummary,
 } from '../index';
@@ -165,11 +170,13 @@ export default function DashboardPage() {
     parseSourceFromQuery(searchParams.get('source')),
   );
   const [searchTerm, setSearchTerm] = useState(() => searchParams.get('q') || '');
+  const [expandedRepos, setExpandedRepos] = useState({});
 
   const status = useSelector(selectDashboardStatus);
   const error = useSelector(selectDashboardError);
   const repositories = useSelector(selectAnalyzedRepositories);
   const summary = useSelector(selectDashboardSummary);
+  const repositoryJobsById = useSelector(selectRepositoryJobsById);
 
   const displayName = user?.username || user?.email?.split('@')[0] || 'there';
 
@@ -304,6 +311,32 @@ export default function DashboardPage() {
         rootDir: repo.fullName || `${repo.owner}/${repo.name}`,
         fileCount: repo.nodeCount,
         analyzedAt: repo.analyzedAt,
+      },
+    };
+  };
+
+  const toggleJobs = (repoId) => {
+    setExpandedRepos((prev) => {
+      const next = { ...prev, [repoId]: !prev[repoId] };
+      return next;
+    });
+
+    const jobsState = repositoryJobsById[repoId];
+    if (!jobsState || (jobsState.status !== 'loading' && jobsState.status !== 'succeeded')) {
+      dispatch(fetchRepositoryJobs({ repositoryId: repoId, page: 1, limit: 20 }));
+    }
+  };
+
+  const getJobGraphLink = (repo, job) => {
+    if (!job?.id || job?.status !== 'completed') return null;
+
+    return {
+      to: `/graph?jobId=${encodeURIComponent(job.id)}`,
+      state: {
+        jobId: job.id,
+        rootDir: repo.fullName || `${repo.owner}/${repo.name}`,
+        fileCount: job.nodeCount,
+        analyzedAt: job.completedAt || job.createdAt,
       },
     };
   };
@@ -459,8 +492,10 @@ export default function DashboardPage() {
               <CardHeader>
                 <CardTitle className="text-base">Database history integration pending</CardTitle>
                 <CardDescription>
-                  The dashboard is wired to read analysis history from
-                  <span className="font-mono"> GET /api/analyze/history </span>
+                  The dashboard is wired to read repositories and job history from
+                  <span className="font-mono"> GET /api/repositories </span>
+                  and
+                  <span className="font-mono"> GET /api/repositories/:id/jobs </span>
                   once that endpoint is connected to your database.
                 </CardDescription>
               </CardHeader>
@@ -557,14 +592,41 @@ export default function DashboardPage() {
                           <span className="font-semibold text-foreground/70">{repo.edgeCount ?? '-'}</span>
                         </div>
                         <div className="flex flex-col gap-0.5">
-                          <span className="text-[9px] uppercase font-bold tracking-tighter opacity-40">Commit</span>
-                          <span className="font-semibold text-foreground/70 truncate" title={repo.commitSha || ''}>
-                            {repo.commitSha ? repo.commitSha.slice(0, 12) : '-'}
+                          <span className="text-[9px] uppercase font-bold tracking-tighter opacity-40">Scans</span>
+                          <span className="font-semibold text-foreground/70">{repo.scanCount ?? 0}</span>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-2 border-t border-border/10 pt-3 sm:grid-cols-2 lg:grid-cols-3">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[9px] uppercase font-bold tracking-tighter opacity-40">Last scanned</span>
+                          <span className="font-semibold text-foreground/70">{formatDate(repo.lastScannedAt || repo.analyzedAt)}</span>
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[9px] uppercase font-bold tracking-tighter opacity-40">Confidence</span>
+                          <span className="font-semibold text-foreground/70">{repo.latestConfidence ?? '-'}</span>
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[9px] uppercase font-bold tracking-tighter opacity-40">Latest job</span>
+                          <span className="font-semibold text-foreground/70 truncate" title={repo.latestJobId || ''}>
+                            {repo.latestJobId ? repo.latestJobId.slice(0, 12) : '-'}
                           </span>
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-end">
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => toggleJobs(repo.id)}
+                          className="gap-1.5"
+                        >
+                          <History className="size-3.5" />
+                          Job history
+                          {expandedRepos[repo.id] ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+                        </Button>
+
                         {graphLink ? (
                           <Button size="sm" variant="outline" asChild>
                             <Link to={graphLink.to} state={graphLink.state}>Open graph</Link>
@@ -575,6 +637,61 @@ export default function DashboardPage() {
                           </Button>
                         )}
                       </div>
+
+                      {expandedRepos[repo.id] ? (
+                        <div className="rounded-xl border border-border/20 bg-background/50 p-3">
+                          {repositoryJobsById[repo.id]?.status === 'loading' ? (
+                            <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <Loader2 className="size-3.5 animate-spin" />
+                              Loading job history...
+                            </p>
+                          ) : null}
+
+                          {repositoryJobsById[repo.id]?.status === 'failed' ? (
+                            <p className="text-xs text-destructive">
+                              {repositoryJobsById[repo.id]?.error?.message || 'Failed to load repository jobs.'}
+                            </p>
+                          ) : null}
+
+                          {repositoryJobsById[repo.id]?.status === 'succeeded' && (repositoryJobsById[repo.id]?.jobs || []).length === 0 ? (
+                            <p className="text-xs text-muted-foreground">No jobs found for this repository yet.</p>
+                          ) : null}
+
+                          {repositoryJobsById[repo.id]?.status === 'succeeded' && (repositoryJobsById[repo.id]?.jobs || []).length > 0 ? (
+                            <div className="grid gap-2">
+                              {(repositoryJobsById[repo.id]?.jobs || []).map((job) => {
+                                const jobGraphLink = getJobGraphLink(repo, job);
+
+                                return (
+                                  <div
+                                    key={job.id}
+                                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/20 bg-background/60 px-3 py-2"
+                                  >
+                                    <div className="flex min-w-0 flex-col gap-0.5 text-[11px] text-muted-foreground">
+                                      <span className="font-semibold text-foreground/80">
+                                        {job.id.slice(0, 12)} • {job.status}
+                                      </span>
+                                      <span>
+                                        {job.branch || repo.branch || 'unknown'} • {formatDate(job.completedAt || job.createdAt)} • nodes {job.nodeCount ?? '-'}
+                                      </span>
+                                    </div>
+
+                                    {jobGraphLink ? (
+                                      <Button size="sm" variant="outline" asChild>
+                                        <Link to={jobGraphLink.to} state={jobGraphLink.state}>Open graph</Link>
+                                      </Button>
+                                    ) : (
+                                      <Button type="button" size="sm" variant="outline" disabled>
+                                        Not restorable
+                                      </Button>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </CardContent>
                   </Card>
                 );

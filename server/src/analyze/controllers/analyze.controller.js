@@ -17,6 +17,7 @@ import {
   buildAnalysisHistoryCacheKey,
   cacheTtl,
   invalidateAnalysisHistoryCacheForUser,
+  invalidateRepositoriesCacheForUser,
   readJsonCache,
   writeJsonCache,
 } from '../../infrastructure/cache.js';
@@ -258,6 +259,7 @@ export async function analyzeController(req, res, next) {
     });
 
     await invalidateAnalysisHistoryCacheForUser(redisClient, userId);
+    await invalidateRepositoriesCacheForUser(redisClient, userId);
 
     return res.status(202).json({ jobId });
   } catch (err) {

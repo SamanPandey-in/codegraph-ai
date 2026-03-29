@@ -45,14 +45,33 @@ const normalizeRepository = (raw) => {
     source,
     sourceCategory,
     githubMode,
-    branch: raw?.branch ?? raw?.defaultBranch ?? null,
+    branch: raw?.branch ?? raw?.defaultBranch ?? raw?.latestJob?.branch ?? null,
     commitSha: raw?.commitSha ?? raw?.commit ?? null,
-    analyzedAt: raw?.analyzedAt ?? raw?.updatedAt ?? raw?.createdAt ?? null,
-    nodeCount: Number.isFinite(raw?.nodeCount) ? raw.nodeCount : null,
-    edgeCount: Number.isFinite(raw?.edgeCount) ? raw.edgeCount : null,
+    analyzedAt:
+      raw?.analyzedAt ??
+      raw?.latestJob?.analyzedAt ??
+      raw?.lastScannedAt ??
+      raw?.updatedAt ??
+      raw?.createdAt ??
+      null,
+    nodeCount:
+      Number.isFinite(raw?.nodeCount)
+        ? raw.nodeCount
+        : Number.isFinite(raw?.latestJob?.nodeCount)
+          ? raw.latestJob.nodeCount
+          : null,
+    edgeCount:
+      Number.isFinite(raw?.edgeCount)
+        ? raw.edgeCount
+        : Number.isFinite(raw?.latestJob?.edgeCount)
+          ? raw.latestJob.edgeCount
+          : null,
+    scanCount: Number.isFinite(raw?.scanCount) ? raw.scanCount : 0,
+    lastScannedAt: raw?.lastScannedAt ?? null,
+    latestConfidence: raw?.latestJob?.confidence ?? null,
     language: raw?.language ?? null,
     visibility: raw?.visibility ?? null,
-    status: raw?.status ?? 'completed',
+    status: raw?.status ?? raw?.latestJob?.status ?? 'completed',
   };
 };
 
@@ -84,14 +103,39 @@ const normalizePayload = (payload) => {
 
 export const dashboardService = {
   async getAnalyzedRepositories({ userId, page = 1, limit = 25 } = {}) {
-    const { data } = await dashboardClient.get('/analyze/history', {
+    const { data } = await dashboardClient.get('/repositories', {
       params: {
         page,
         limit,
-        ...(userId ? { userId } : {}),
       },
     });
 
     return normalizePayload(data);
+  },
+
+  async getRepositoryJobs({ repositoryId, page = 1, limit = 20 } = {}) {
+    const { data } = await dashboardClient.get(`/repositories/${repositoryId}/jobs`, {
+      params: { page, limit },
+    });
+
+    return {
+      repository: data?.repository ?? null,
+      jobs: Array.isArray(data?.jobs)
+        ? data.jobs.map((job) => ({
+            id: job?.id,
+            branch: job?.branch ?? null,
+            status: job?.status ?? 'unknown',
+            confidence: job?.confidence ?? null,
+            fileCount: Number.isFinite(job?.fileCount) ? job.fileCount : null,
+            nodeCount: Number.isFinite(job?.nodeCount) ? job.nodeCount : null,
+            edgeCount: Number.isFinite(job?.edgeCount) ? job.edgeCount : null,
+            errorSummary: job?.errorSummary ?? null,
+            startedAt: job?.startedAt ?? null,
+            completedAt: job?.completedAt ?? null,
+            createdAt: job?.createdAt ?? null,
+          }))
+        : [],
+      pagination: data?.pagination ?? null,
+    };
   },
 };

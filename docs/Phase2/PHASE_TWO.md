@@ -116,11 +116,11 @@ QueryBar above ReactFlow canvas; JobProgressBar replaces the loading spinner dur
 
 ## Sprint 4 - Data layer - user history, saved repos, quick scan
 
-GET /api/repositories — user's scanned repo listnew
+### GET /api/repositories — user's scanned repo list - new
 Returns repositories rows for current user; includes last_scanned_at, scan_count, last job confidence
 
-GET /api/repositories/:id/jobs — job historynew
+### GET /api/repositories/:id/jobs — job history - new
 Lists all analysis_jobs for a repo; user can click to restore any previous graph from DB
 
-Update Dashboard to show repo history + quick re-analyzemodify
+### Update Dashboard to show repo history + quick re-analyze - modify
 DashboardPage shows previously scanned repos from DB; "Re-analyze" button skips repo picker and enqueues directly

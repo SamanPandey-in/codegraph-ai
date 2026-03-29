@@ -8,6 +8,16 @@ const GRAPH_CACHE_TTL_SECONDS = Number.parseInt(
   10,
 );
 
+const REPOSITORIES_LIST_CACHE_TTL_SECONDS = Number.parseInt(
+  process.env.REPOSITORIES_LIST_CACHE_TTL_SECONDS || '60',
+  10,
+);
+
+const REPOSITORY_JOBS_CACHE_TTL_SECONDS = Number.parseInt(
+  process.env.REPOSITORY_JOBS_CACHE_TTL_SECONDS || '60',
+  10,
+);
+
 const CACHE_VERSION = 'v1';
 
 function withVersion(key) {
@@ -31,6 +41,14 @@ export function buildAnalysisHistoryCacheKey({ userId, page, limit }) {
 
 export function buildGraphCacheKey(jobId) {
   return withVersion(`graph:job:${jobId}`);
+}
+
+export function buildRepositoriesListCacheKey({ userId, page, limit }) {
+  return withVersion(`repositories:user:${userId}:page:${page}:limit:${limit}`);
+}
+
+export function buildRepositoryJobsCacheKey({ userId, repositoryId, page, limit }) {
+  return withVersion(`repository-jobs:user:${userId}:repo:${repositoryId}:page:${page}:limit:${limit}`);
 }
 
 export async function readJsonCache(redis, key) {
@@ -89,7 +107,18 @@ export async function invalidateAnalysisHistoryCacheForUser(redis, userId) {
   await deleteByPattern(redis, withVersion(`analysis-history:user:${userId}:*`));
 }
 
+export async function invalidateRepositoriesCacheForUser(redis, userId) {
+  if (!userId) return;
+
+  await Promise.all([
+    deleteByPattern(redis, withVersion(`repositories:user:${userId}:*`)),
+    deleteByPattern(redis, withVersion(`repository-jobs:user:${userId}:*`)),
+  ]);
+}
+
 export const cacheTtl = {
   analysisHistorySeconds: normalizedTtl(ANALYSIS_HISTORY_CACHE_TTL_SECONDS, 60),
   graphSeconds: normalizedTtl(GRAPH_CACHE_TTL_SECONDS, 300),
+  repositoriesListSeconds: normalizedTtl(REPOSITORIES_LIST_CACHE_TTL_SECONDS, 60),
+  repositoryJobsSeconds: normalizedTtl(REPOSITORY_JOBS_CACHE_TTL_SECONDS, 60),
 };
