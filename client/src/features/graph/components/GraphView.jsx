@@ -10,13 +10,13 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import dagre from 'dagre';
-import { X } from 'lucide-react';
-import { QueryBar } from '../../ai';
+import { AiPanel, QueryBar } from '../../ai';
 import {
   selectNode,
   selectSelectedNodeId,
   selectGraphData,
 } from '../slices/graphSlice';
+import { selectDeadFiles, selectHighlightedNodeIds } from '../../ai/slices/aiSlice';
 
 const TYPE_COLORS = {
   component: { bg: '#1A1A1A', border: '#404040' },
@@ -62,12 +62,24 @@ function applyDagreLayout(nodes, edges) {
   });
 }
 
-function graphToFlow(graph) {
+function graphToFlow(graph, highlightedNodeIds, deadFiles) {
+  const highlightSet = new Set(highlightedNodeIds || []);
+  const deadSet = new Set(deadFiles || []);
+
   const nodes = Object.entries(graph).map(([file, { type }]) => ({
     id: file,
     data: { label: file },
     position: { x: 0, y: 0 },
-    style: typeStyle(type),
+    style: {
+      ...typeStyle(type),
+      boxShadow: highlightSet.has(file)
+        ? '0 0 0 2px rgba(251,191,36,0.95), 0 0 20px rgba(251,191,36,0.45)'
+        : undefined,
+      border: deadSet.has(file)
+        ? '1px dashed rgba(248,113,113,0.9)'
+        : typeStyle(type).border,
+      opacity: deadSet.has(file) ? 0.75 : 1,
+    },
   }));
 
   const edges = [];
@@ -89,63 +101,20 @@ function graphToFlow(graph) {
   return { nodes: applyDagreLayout(nodes, edges), edges };
 }
 
-function NodeDetail({ nodeId, graph, onClose }) {
-  if (!nodeId || !graph[nodeId]) return null;
-  const { deps = [], type } = graph[nodeId];
-  const { border } = TYPE_COLORS[type] || TYPE_COLORS.module;
-  const usedBy = Object.entries(graph)
-    .filter(([, v]) => v.deps?.includes(nodeId))
-    .map(([k]) => k);
-
-  return (
-    <div className="absolute top-2 right-2 z-10 w-72 rounded-xl border border-border bg-card/95 backdrop-blur-sm p-4 text-xs shadow-xl transition-all">
-      <div className="flex items-start justify-between gap-2 mb-3">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <span className="inline-block size-2.5 rounded-full shrink-0" style={{ background: border }} />
-          <span className="font-mono font-semibold text-foreground truncate">{nodeId}</span>
-        </div>
-        <button onClick={onClose} className="shrink-0 text-muted-foreground hover:text-foreground transition-colors" aria-label="Close">
-          <X className="size-3.5" />
-        </button>
-      </div>
-
-      <p className="mb-3 text-muted-foreground">
-        Type: <span className="capitalize text-foreground/80">{type}</span>
-      </p>
-
-      {deps.length > 0 && (
-        <div className="mb-3">
-          <p className="mb-1 text-muted-foreground/60 uppercase tracking-wider text-[10px]">Imports ({deps.length})</p>
-          <ul className="flex flex-col gap-0.5 max-h-28 overflow-y-auto custom-scrollbar">
-            {deps.map((d) => <li key={d} className="font-mono text-gold/80 truncate">{d}</li>)}
-          </ul>
-        </div>
-      )}
-
-      {usedBy.length > 0 && (
-        <div>
-          <p className="mb-1 text-muted-foreground/60 uppercase tracking-wider text-[10px]">Used by ({usedBy.length})</p>
-          <ul className="flex flex-col gap-0.5 max-h-28 overflow-y-auto custom-scrollbar">
-            {usedBy.map((d) => <li key={d} className="font-mono text-foreground/70 truncate">{d}</li>)}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function GraphView() {
   const dispatch = useDispatch();
   const rawData = useSelector(selectGraphData);
   const selectedNodeId = useSelector(selectSelectedNodeId);
+  const highlightedNodeIds = useSelector(selectHighlightedNodeIds);
+  const deadFiles = useSelector(selectDeadFiles);
   const graph = rawData?.graph ?? EMPTY_GRAPH;
   const jobId = rawData?.jobId;
   const emptyMessage =
     rawData?.message || 'No JS/TS files found in the selected directory.';
 
   const { nodes: initialNodes, edges: initialEdges } = useMemo(
-    () => graphToFlow(graph),
-    [graph],
+    () => graphToFlow(graph, highlightedNodeIds, deadFiles),
+    [graph, highlightedNodeIds, deadFiles],
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
@@ -210,7 +179,7 @@ export default function GraphView() {
         </div>
       </ReactFlow>      
 
-      <NodeDetail
+      <AiPanel
         nodeId={selectedNodeId}
         graph={graph}
         onClose={() => dispatch(selectNode(null))}

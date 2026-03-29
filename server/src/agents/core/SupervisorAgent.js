@@ -8,6 +8,11 @@ import { PersistenceAgent } from '../persistence/PersistenceAgent.js';
 import { AuditLogger } from './AuditLogger.js';
 import { JobStatusEmitter } from './JobStatusEmitter.js';
 import { decideConfidence, computeOverallConfidence } from './confidence.js';
+import {
+  buildGraphCacheKey,
+  deleteCacheKey,
+  invalidateAnalysisHistoryCacheForUser,
+} from '../../infrastructure/cache.js';
 
 export class SupervisorAgent {
   constructor({ db, redis } = {}) {
@@ -276,7 +281,36 @@ export class SupervisorAgent {
       }
     }
 
+    if (['completed', 'failed', 'partial'].includes(status)) {
+      await this._invalidateReadCachesForJob(jobId);
+    }
+
     await this.emitter.emit(jobId, { status, ...extra });
+  }
+
+  async _invalidateReadCachesForJob(jobId) {
+    try {
+      await deleteCacheKey(this.redis, buildGraphCacheKey(jobId));
+
+      if (!this.db || typeof this.db.query !== 'function') return;
+
+      const jobResult = await this.db.query(
+        `
+          SELECT user_id
+          FROM analysis_jobs
+          WHERE id = $1
+          LIMIT 1
+        `,
+        [jobId],
+      );
+
+      const userId = jobResult.rows?.[0]?.user_id;
+      if (userId) {
+        await invalidateAnalysisHistoryCacheForUser(this.redis, userId);
+      }
+    } catch (error) {
+      console.error('[SupervisorAgent] Failed to invalidate Redis caches:', error.message);
+    }
   }
 
   _sleep(ms) {

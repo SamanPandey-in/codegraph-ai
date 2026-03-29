@@ -1,5 +1,11 @@
 import { Router } from 'express';
-import { pgPool } from '../../../infrastructure/connections.js';
+import { pgPool, redisClient } from '../../../infrastructure/connections.js';
+import {
+  buildGraphCacheKey,
+  cacheTtl,
+  readJsonCache,
+  writeJsonCache,
+} from '../../../infrastructure/cache.js';
 
 const router = Router();
 
@@ -11,6 +17,13 @@ router.get('/:jobId', async (req, res, next) => {
   }
 
   try {
+    const graphCacheKey = buildGraphCacheKey(jobId);
+    const cachedGraph = await readJsonCache(redisClient, graphCacheKey);
+    if (cachedGraph) {
+      res.setHeader('X-Cache', 'HIT');
+      return res.status(200).json(cachedGraph);
+    }
+
     const [nodesResult, edgesResult] = await Promise.all([
       pgPool.query(
         `
@@ -61,7 +74,7 @@ router.get('/:jobId', async (req, res, next) => {
       };
     }
 
-    return res.status(200).json({
+    const responsePayload = {
       graph,
       edges,
       topology: {
@@ -69,7 +82,17 @@ router.get('/:jobId', async (req, res, next) => {
         edgeCount: edgesResult.rowCount,
         deadCodeCandidates,
       },
-    });
+    };
+
+    await writeJsonCache(
+      redisClient,
+      graphCacheKey,
+      responsePayload,
+      cacheTtl.graphSeconds,
+    );
+
+    res.setHeader('X-Cache', 'MISS');
+    return res.status(200).json(responsePayload);
   } catch (error) {
     return next(error);
   }

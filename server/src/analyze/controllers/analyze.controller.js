@@ -82,7 +82,7 @@ async function resolveDatabaseUserId(authUser) {
       VALUES ($1, $2, $3, $4)
       ON CONFLICT (github_id)
       DO UPDATE
-            ORDER BY r.id, COALESCE(aj.completed_at, aj.created_at) DESC
+      SET username = COALESCE(EXCLUDED.username, users.username),
           email = COALESCE(EXCLUDED.email, users.email),
           avatar_url = COALESCE(EXCLUDED.avatar_url, users.avatar_url),
           updated_at = NOW()
@@ -295,6 +295,7 @@ export async function listAnalysisHistoryController(req, res, next) {
     const historyCacheKey = buildAnalysisHistoryCacheKey({ userId, page, limit });
     const cachedHistory = await readJsonCache(redisClient, historyCacheKey);
     if (cachedHistory) {
+      res.setHeader('X-Cache', 'HIT');
       return res.status(200).json(cachedHistory);
     }
 
@@ -399,6 +400,7 @@ export async function listAnalysisHistoryController(req, res, next) {
       cacheTtl.analysisHistorySeconds,
     );
 
+    res.setHeader('X-Cache', 'MISS');
     return res.status(200).json(responsePayload);
   } catch (err) {
     return next(err);

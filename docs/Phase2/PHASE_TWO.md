@@ -113,3 +113,14 @@ Import highlightedNodeIds + deadFiles from aiSlice; pass to graphToFlow; swap No
 
 ### Wire QueryBar + JobProgressBar into AnalyzePage - modify
 QueryBar above ReactFlow canvas; JobProgressBar replaces the loading spinner during analysis
+
+## Sprint 4 - Data layer - user history, saved repos, quick scan
+
+GET /api/repositories — user's scanned repo listnew
+Returns repositories rows for current user; includes last_scanned_at, scan_count, last job confidence
+
+GET /api/repositories/:id/jobs — job historynew
+Lists all analysis_jobs for a repo; user can click to restore any previous graph from DB
+
+Update Dashboard to show repo history + quick re-analyzemodify
+DashboardPage shows previously scanned repos from DB; "Re-analyze" button skips repo picker and enqueues directly
