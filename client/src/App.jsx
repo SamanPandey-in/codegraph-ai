@@ -10,7 +10,7 @@ import Layout from '@/components/layout/Layout';
 
 import { LandingPage, LoginPage, SignupPage } from '@/features/auth';
 import { DashboardPage }                      from '@/features/dashboard';
-import { AnalyzePage }                        from '@/features/graph';
+import { AnalyzePage, GraphPage }             from '@/features/graph';
 
 function RootRedirect() {
   const { isAuthenticated, loading } = useAuth();
@@ -40,10 +40,9 @@ function AppRoutes() {
         <Route element={<Layout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/analyze" element={<AnalyzePage />} />
+          <Route path="/graph" element={<GraphPage />} />
         </Route>
       </Route>
-
-      <Route path="/graph" element={<Navigate to="/analyze" replace />} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -295,6 +295,14 @@ export async function listAnalysisHistoryController(req, res, next) {
               r.github_repo,
               r.default_branch,
               aj.id AS job_id,
+              (
+                SELECT aj_completed.id
+                FROM analysis_jobs aj_completed
+                WHERE aj_completed.repository_id = r.id
+                  AND aj_completed.status = 'completed'
+                ORDER BY COALESCE(aj_completed.completed_at, aj_completed.created_at) DESC
+                LIMIT 1
+              ) AS latest_completed_job_id,
               aj.status,
               aj.branch,
               aj.node_count,
@@ -333,9 +341,12 @@ export async function listAnalysisHistoryController(req, res, next) {
         fullName: row.full_name,
         githubOwner: row.github_owner,
       });
+      const graphJobId = row.latest_completed_job_id || (row.status === 'completed' ? row.job_id : null);
 
       return {
         id: row.repository_id,
+        jobId: graphJobId,
+        latestJobId: row.job_id,
         name,
         owner,
         fullName: row.full_name,

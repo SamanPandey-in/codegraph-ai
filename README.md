@@ -105,6 +105,27 @@ Password:
 postgres
 ```
 
+## Add your Postgres server
+
+Inside pgAdmin:
+
+- Right-click “Servers” → Register → Server
+- **General tab** Name: local-postgres (or anything)
+- **Connection tab** Use your connection string details:
+
+	- Host name/address: host.docker.internal ⚠️ important
+	- Port: 5433
+	- Username: postgres
+	- Password: postgres
+	- Database: codegraph
+
+- Why host.docker.internal?
+
+Because pgAdmin runs inside a container, and:
+
+	- localhost inside that container ≠ your machine
+	- host.docker.internal points to your host machine
+
 ---
 
 ## 🧠 Notes

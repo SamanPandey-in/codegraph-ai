@@ -1,11 +1,13 @@
 import React from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import { RotateCcw, Code2, FolderOpen, FileCode2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { clearGraph, selectGraphData } from '../slices/graphSlice';
 
 export default function GraphToolbar() {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const data = useSelector(selectGraphData);
 
   if (!data) return null;
@@ -13,7 +15,7 @@ export default function GraphToolbar() {
   const { rootDir, fileCount } = data;
 
   return (
-    <header className="flex items-center justify-between gap-4 px-4 py-2.5 border-b border-border bg-background/80 backdrop-blur-sm flex-shrink-0">
+    <header className="flex items-center justify-between gap-4 px-4 py-2.5 border-b border-border bg-background/80 backdrop-blur-sm shrink-0">
       <div className="flex items-center gap-3 min-w-0">
         <div className="flex items-center gap-1.5 shrink-0">
           <Code2 className="size-4 text-primary" />
@@ -40,7 +42,10 @@ export default function GraphToolbar() {
       <Button
         variant="outline"
         size="sm"
-        onClick={() => dispatch(clearGraph())}
+        onClick={() => {
+          dispatch(clearGraph());
+          navigate('/analyze');
+        }}
         className="shrink-0 gap-1.5"
       >
         <RotateCcw className="size-3.5" />

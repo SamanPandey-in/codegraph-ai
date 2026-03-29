@@ -75,6 +75,45 @@ export const analyzeCodebase = createAsyncThunk(
   },
 );
 
+export const loadSavedGraph = createAsyncThunk(
+  'graph/loadSavedGraph',
+  async ({ jobId, rootDir = null, fileCount = null, analyzedAt = null } = {}, { rejectWithValue }) => {
+    try {
+      if (!jobId) {
+        throw new Error('A job id is required to load a saved analysis graph.');
+      }
+
+      const graph = await graphService.getGraph(jobId);
+
+      return {
+        ...graph,
+        jobId,
+        rootDir: rootDir || graph?.rootDir || `saved-analysis:${jobId}`,
+        fileCount:
+          Number.isFinite(fileCount)
+            ? fileCount
+            : Number.isFinite(graph?.topology?.nodeCount)
+              ? graph.topology.nodeCount
+              : 0,
+        analyzedAt,
+        message: graph?.message || null,
+        job: {
+          jobId,
+          status: 'completed',
+          nodeCount: graph?.topology?.nodeCount ?? null,
+          edgeCount: graph?.topology?.edgeCount ?? null,
+        },
+      };
+    } catch (err) {
+      const message =
+        err.response?.data?.error ||
+        err.message ||
+        'Failed to load saved analysis graph.';
+      return rejectWithValue(message);
+    }
+  },
+);
+
 const graphSlice = createSlice({
   name: 'graph',
   initialState: {
@@ -117,6 +156,20 @@ const graphSlice = createSlice({
         state.job = action.payload.job || state.job;
       })
       .addCase(analyzeCodebase.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.payload;
+      })
+      .addCase(loadSavedGraph.pending, (state) => {
+        state.status = 'loading';
+        state.error = null;
+        state.selectedNodeId = null;
+      })
+      .addCase(loadSavedGraph.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        state.data = action.payload;
+        state.job = action.payload.job || state.job;
+      })
+      .addCase(loadSavedGraph.rejected, (state, action) => {
         state.status = 'failed';
         state.error = action.payload;
       });

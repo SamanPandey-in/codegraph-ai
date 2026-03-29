@@ -4,6 +4,7 @@ import {
   Code2,
   LayoutDashboard,
   Network,
+  Share2,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
@@ -19,6 +20,11 @@ const NAV_ITEMS = [
     to: '/analyze',
     icon: <Network className="size-4 shrink-0" />,
     label: 'Analyze',
+  },
+  {
+    to: '/graph',
+    icon: <Share2 className="size-4 shrink-0" />,
+    label: 'Graph',
   },
 ];
 

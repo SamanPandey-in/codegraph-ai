@@ -27,6 +27,15 @@ const normalizeRepository = (raw) => {
 
   return {
     id: raw?.id ?? raw?._id ?? `${raw?.owner ?? 'unknown'}/${raw?.name ?? 'repository'}`,
+    jobId:
+      raw?.jobId ??
+      raw?.job_id ??
+      raw?.latestCompletedJobId ??
+      raw?.latest_completed_job_id ??
+      raw?.graphJobId ??
+      raw?.graph_job_id ??
+      null,
+    latestJobId: raw?.latestJobId ?? raw?.latest_job_id ?? null,
     name: raw?.name ?? raw?.repo ?? 'Unknown repository',
     owner: raw?.owner ?? raw?.organization ?? 'Unknown owner',
     fullName:

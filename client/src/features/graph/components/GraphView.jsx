@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import ReactFlow, {
   Background,
@@ -11,6 +11,7 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import dagre from 'dagre';
 import { X } from 'lucide-react';
+import { QueryBar } from '../../ai';
 import {
   selectNode,
   selectSelectedNodeId,
@@ -26,6 +27,9 @@ const TYPE_COLORS = {
   config:    { bg: '#0B0B0B', border: '#666666' },
   module:    { bg: '#1A1A1A', border: '#404040' },
 };
+
+// Type legend data (map TYPE_COLORS to legend entries)
+const TYPE_LEGEND = Object.entries(TYPE_COLORS).map(([type, { border }]) => [type, border]);
 
 function typeStyle(type) {
   const { bg, border } = TYPE_COLORS[type] || TYPE_COLORS.module;
@@ -135,6 +139,7 @@ export default function GraphView() {
   const rawData = useSelector(selectGraphData);
   const selectedNodeId = useSelector(selectSelectedNodeId);
   const graph = rawData?.graph ?? EMPTY_GRAPH;
+  const jobId = rawData?.jobId;
   const emptyMessage =
     rawData?.message || 'No JS/TS files found in the selected directory.';
 
@@ -143,8 +148,13 @@ export default function GraphView() {
     [graph],
   );
 
-  const [nodes, , onNodesChange] = useNodesState(initialNodes);
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+
+  useEffect(() => {
+    setNodes(initialNodes);
+    setEdges(initialEdges);
+  }, [initialEdges, initialNodes, setEdges, setNodes]);
 
   const onConnect = useCallback(
     (params) => setEdges((eds) => addEdge(params, eds)),
@@ -184,15 +194,21 @@ export default function GraphView() {
         <Controls />
         <Background color="rgb(var(--foreground) / 0.05)" gap={20} />
 
-        <div className="absolute bottom-14 left-3 z-10 rounded-lg border border-border bg-card/90 p-3 text-[11px] shadow-lg">
-          {Object.entries(TYPE_COLORS).map(([type, { border }]) => (
+        {/* Query Bar Panel */}
+        <div className="absolute top-3 left-3 z-10 w-96 rounded-lg border border-border bg-card/90 backdrop-blur-sm shadow-lg p-0">
+          <QueryBar jobId={jobId} />
+        </div>
+
+        {/* Type Legend */}
+        <div className="absolute bottom-14 left-3 z-10 rounded-lg border border-border bg-card/90 backdrop-blur-sm p-3 text-[11px] shadow-lg">
+          {TYPE_LEGEND.map(([type, color]) => (
             <div key={type} className="flex items-center gap-2 mb-1 last:mb-0">
-              <span className="inline-block size-2.5 rounded-sm shrink-0" style={{ background: border }} />
+              <span className="inline-block size-2.5 rounded-sm shrink-0" style={{ background: color }} />
               <span className="text-muted-foreground capitalize">{type}</span>
             </div>
           ))}
         </div>
-      </ReactFlow>
+      </ReactFlow>      
 
       <NodeDetail
         nodeId={selectedNodeId}

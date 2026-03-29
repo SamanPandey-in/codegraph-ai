@@ -294,6 +294,20 @@ export default function DashboardPage() {
     setSearchTerm('');
   };
 
+  const getGraphLink = (repo) => {
+    if (!repo?.jobId) return null;
+
+    return {
+      to: `/graph?jobId=${encodeURIComponent(repo.jobId)}`,
+      state: {
+        jobId: repo.jobId,
+        rootDir: repo.fullName || `${repo.owner}/${repo.name}`,
+        fileCount: repo.nodeCount,
+        analyzedAt: repo.analyzedAt,
+      },
+    };
+  };
+
   return (
     <div className="flex flex-col gap-10 py-6">
       <div className="animate-in fade-in slide-in-from-top-4 duration-700">
@@ -327,7 +341,7 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent>
                 <Link to={action.href}>
-                  <Button size="sm" className="gap-2 w-full sm:w-auto bg-gold text-white hover:bg-gold/90 shadow-md rounded-xl font-bold tracking-wide transition-all group-hover:translate-y-[-2px]">
+                  <Button size="sm" className="gap-2 w-full sm:w-auto bg-gold text-white hover:bg-gold/90 shadow-md rounded-xl font-bold tracking-wide transition-all group-hover:-translate-y-0.5">
                     {action.cta}
                     <ArrowRight className="size-4 group-hover:translate-x-1 transition-transform" />
                   </Button>
@@ -495,50 +509,76 @@ export default function DashboardPage() {
 
           {!isLoadingFirstTime && !error?.message && visibleRepositories.length > 0 ? (
             <div className="grid gap-3">
-              {visibleRepositories.map((repo) => (
-                <Card 
-                  key={repo.id} 
-                  className="rounded-2xl shadow-neu-inset border-none bg-background/40 transition-all duration-300 animate-in fade-in slide-in-from-right-4 fill-mode-both"
-                  style={{ animationDelay: `${400 + repositories.indexOf(repo) * 50}ms` }}
-                >
-                  <CardContent className="flex flex-col gap-4 py-6">
-                    <div className="flex flex-wrap items-start justify-between gap-4">
-                      <div className="space-y-1">
-                        <h3 className="text-base font-display font-bold text-foreground hover:text-gold transition-colors cursor-pointer tracking-tight">
-                          {repo.fullName || `${repo.owner}/${repo.name}`}
-                        </h3>
-                        <p className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground/60">
-                          {repo.source} <span className="mx-1 opacity-30">|</span> {repo.branch || 'unknown'}
-                        </p>
-                      </div>
-                      <span className="rounded-xl border border-border/20 bg-background/50 px-3 py-1 text-[9px] font-black uppercase tracking-[0.15em] text-muted-foreground shadow-sm">
-                        {repo.status}
-                      </span>
-                    </div>
+              {visibleRepositories.map((repo) => {
+                const graphLink = getGraphLink(repo);
 
-                    <div className="grid gap-4 text-[11px] text-muted-foreground/80 sm:grid-cols-2 lg:grid-cols-4 pt-2 border-t border-border/10">
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-[9px] uppercase font-bold tracking-tighter opacity-40">Analyzed</span>
-                        <span className="font-semibold text-foreground/70">{formatDate(repo.analyzedAt)}</span>
-                      </div>
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-[9px] uppercase font-bold tracking-tighter opacity-40">Nodes</span>
-                        <span className="font-semibold text-foreground/70">{repo.nodeCount ?? '-'}</span>
-                      </div>
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-[9px] uppercase font-bold tracking-tighter opacity-40">Edges</span>
-                        <span className="font-semibold text-foreground/70">{repo.edgeCount ?? '-'}</span>
-                      </div>
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-[9px] uppercase font-bold tracking-tighter opacity-40">Commit</span>
-                        <span className="font-semibold text-foreground/70 truncate" title={repo.commitSha || ''}>
-                          {repo.commitSha ? repo.commitSha.slice(0, 12) : '-'}
+                return (
+                  <Card
+                    key={repo.id}
+                    className="rounded-2xl shadow-neu-inset border-none bg-background/40 transition-all duration-300 animate-in fade-in slide-in-from-right-4 fill-mode-both"
+                    style={{ animationDelay: `${400 + repositories.indexOf(repo) * 50}ms` }}
+                  >
+                    <CardContent className="flex flex-col gap-4 py-6">
+                      <div className="flex flex-wrap items-start justify-between gap-4">
+                        <div className="space-y-1">
+                          {graphLink ? (
+                            <Link
+                              to={graphLink.to}
+                              state={graphLink.state}
+                              className="text-left text-base font-display font-bold text-foreground hover:text-gold transition-colors cursor-pointer tracking-tight"
+                            >
+                              {repo.fullName || `${repo.owner}/${repo.name}`}
+                            </Link>
+                          ) : (
+                            <span className="text-left text-base font-display font-bold text-foreground/70 tracking-tight">
+                              {repo.fullName || `${repo.owner}/${repo.name}`}
+                            </span>
+                          )}
+                          <p className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground/60">
+                            {repo.source} <span className="mx-1 opacity-30">|</span> {repo.branch || 'unknown'}
+                          </p>
+                        </div>
+                        <span className="rounded-xl border border-border/20 bg-background/50 px-3 py-1 text-[9px] font-black uppercase tracking-[0.15em] text-muted-foreground shadow-sm">
+                          {repo.status}
                         </span>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+
+                      <div className="grid gap-4 text-[11px] text-muted-foreground/80 sm:grid-cols-2 lg:grid-cols-4 pt-2 border-t border-border/10">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[9px] uppercase font-bold tracking-tighter opacity-40">Analyzed</span>
+                          <span className="font-semibold text-foreground/70">{formatDate(repo.analyzedAt)}</span>
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[9px] uppercase font-bold tracking-tighter opacity-40">Nodes</span>
+                          <span className="font-semibold text-foreground/70">{repo.nodeCount ?? '-'}</span>
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[9px] uppercase font-bold tracking-tighter opacity-40">Edges</span>
+                          <span className="font-semibold text-foreground/70">{repo.edgeCount ?? '-'}</span>
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[9px] uppercase font-bold tracking-tighter opacity-40">Commit</span>
+                          <span className="font-semibold text-foreground/70 truncate" title={repo.commitSha || ''}>
+                            {repo.commitSha ? repo.commitSha.slice(0, 12) : '-'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-end">
+                        {graphLink ? (
+                          <Button size="sm" variant="outline" asChild>
+                            <Link to={graphLink.to} state={graphLink.state}>Open graph</Link>
+                          </Button>
+                        ) : (
+                          <Button type="button" size="sm" variant="outline" disabled>
+                            Graph unavailable
+                          </Button>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           ) : null}
         </div>

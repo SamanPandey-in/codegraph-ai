@@ -1,0 +1,177 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { Search, X, CheckCircle, AlertCircle } from 'lucide-react';
+import { queryGraph, resetAiState, selectAiQueryState } from '../slices/aiSlice';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+
+export default function QueryBar({ jobId }) {
+  const dispatch = useDispatch();
+  const queryState = useSelector(selectAiQueryState);
+  const [question, setQuestion] = useState('');
+  const [expanded, setExpanded] = useState(false);
+  const inputRef = useRef(null);
+
+  const { status, data, error } = queryState;
+  const isLoading = status === 'pending';
+  const hasResult = data && status === 'fulfilled';
+  const hasError = error && status === 'rejected';
+  const highlightCount = data?.highlightedFiles?.length || 0;
+
+  // Auto-focus input when expanded
+  useEffect(() => {
+    if (expanded && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [expanded]);
+
+  const handleAsk = async (e) => {
+    e.preventDefault();
+    if (!question.trim() || !jobId) return;
+
+    dispatch(queryGraph({ question, jobId }));
+  };
+
+  const handleClear = () => {
+    setQuestion('');
+    dispatch(resetAiState());
+    setExpanded(false);
+  };
+
+  const handleInputChange = (e) => {
+    setQuestion(e.target.value);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleAsk(e);
+    }
+  };
+
+  return (
+    <div className="relative w-full">
+      {/* Minimalist Query Input */}
+      <div
+        className={`transition-all duration-300 ease-out ${
+          expanded || hasResult
+            ? 'ring-1 ring-primary/20 rounded-lg bg-background'
+            : 'bg-muted/40 hover:bg-muted/60 rounded-full'
+        }`}
+      >
+        <form onSubmit={handleAsk} className="flex items-center gap-2 px-4 py-3">
+          <Search className="size-4 text-muted-foreground shrink-0" />
+
+          <input
+            ref={inputRef}
+            type="text"
+            placeholder={jobId ? 'Ask about your codebase...' : 'Load analysis first'}
+            value={question}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            onFocus={() => setExpanded(true)}
+            disabled={!jobId || isLoading}
+            className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+          />
+
+          {question && (
+            <button
+              type="button"
+              onClick={() => setQuestion('')}
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <X className="size-4" />
+            </button>
+          )}
+
+          <Button
+            type="submit"
+            size="sm"
+            variant="default"
+            disabled={!question.trim() || !jobId || isLoading}
+            className="ml-auto"
+          >
+            {isLoading ? (
+              <span className="flex items-center gap-2">
+                <span className="size-3 border-1.5 border-current border-t-transparent rounded-full animate-spin" />
+                Searching
+              </span>
+            ) : (
+              'Ask'
+            )}
+          </Button>
+        </form>
+
+        {/* Results Display */}
+        {(hasResult || hasError) && (
+          <div
+            className={`border-t transition-all duration-300 ${
+              hasResult
+                ? 'border-muted bg-gradient-to-b from-background via-background to-muted/20'
+                : 'border-destructive/20 bg-destructive/5'
+            }`}
+          >
+            <div className="px-4 py-3 space-y-3">
+              {/* Answer Section */}
+              {hasResult && (
+                <div className="space-y-2">
+                  <div className="flex items-start gap-2">
+                    <CheckCircle className="size-4 text-emerald-500/70 shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-foreground leading-relaxed">
+                        {data.answer}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Highlighted Files Feedback */}
+                  {highlightCount > 0 && (
+                    <div className="flex items-center gap-2 pl-6 pt-1">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20">
+                        <span className="size-1.5 bg-primary/60 rounded-full" />
+                        <span className="text-xs font-medium text-primary">
+                          Highlighting {highlightCount} file{highlightCount !== 1 ? 's' : ''}
+                        </span>
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Error Section */}
+              {hasError && (
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="size-4 text-destructive/70 shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-destructive/80">
+                      {error.message || 'Failed to query repository'}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2 pt-1 pl-6">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleClear}
+                  className="text-xs h-8 px-2"
+                >
+                  Clear
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Subtle hint when not expanded */}
+      {!expanded && !hasResult && jobId && (
+        <p className="text-xs text-muted-foreground mt-2 px-4">
+          Ask questions about your codebase architecture, dependencies, and design patterns.
+        </p>
+      )}
+    </div>
+  );
+}
