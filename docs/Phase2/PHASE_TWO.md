@@ -1,5 +1,11 @@
 # Phase 2
 
+## Implementation Reference
+
+For the production implementation details of Redis caching, cache invalidation, and optimized DB retrieval (including `/api/analyze/history`, `/api/graph/:jobId`, `/api/repositories`, and `/api/repositories/:id/jobs`), see:
+
+- [docs/REDIS_CACHING_AND_DATA_RETRIEVAL.md](docs/REDIS_CACHING_AND_DATA_RETRIEVAL.md)
+
 ## Sprint 1 : Infrastructure foundation - replace the monolith with agents
 
 Why Sprint 1 before any AI features: The existing analyze.service.js is a synchronous monolith — it blocks the HTTP response for the entire duration of parsing. Adding AI features on top of that means the HTTP request would have to wait 30 seconds for parsing plus 5–10 seconds for LLM calls. That's a broken user experience. Sprint 1 converts the system to async (BullMQ queue → SSE stream) so Phase 2's AI work can happen in the background without ever touching the HTTP layer. This also means the client gets real-time progress per agent instead of a spinner.

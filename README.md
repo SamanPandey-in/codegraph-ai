@@ -119,9 +119,7 @@ Inside pgAdmin:
 	- Password: postgres
 	- Database: codegraph
 
-- Why host.docker.internal?
-
-Because pgAdmin runs inside a container, and:
+- Why host.docker.internal? Because pgAdmin runs inside a container, and:
 
 	- localhost inside that container ≠ your machine
 	- host.docker.internal points to your host machine
@@ -145,6 +143,47 @@ DATABASE_URL=postgres://postgres:postgres@postgres:5432/codegraph
 REDIS_URL=redis://redis:6379
 OPENAI_API_KEY=your_key_here
 ```
+
+Optional cache tuning:
+
+```
+ANALYSIS_HISTORY_CACHE_TTL_SECONDS=60
+GRAPH_CACHE_TTL_SECONDS=300
+REPOSITORIES_LIST_CACHE_TTL_SECONDS=60
+REPOSITORY_JOBS_CACHE_TTL_SECONDS=60
+QUERY_AGENT_CACHE_TTL_SECONDS=3600
+ENRICHMENT_CACHE_TTL_SECONDS=3600
+```
+
+---
+
+# 🧠 Redis Caching + Optimized Retrieval
+
+Implemented Redis-backed cache-aside and invalidation now cover:
+
+- `GET /api/analyze/history`
+- `GET /api/graph/:jobId`
+- `GET /api/repositories`
+- `GET /api/repositories/:id/jobs`
+
+Each endpoint returns `X-Cache: HIT` or `X-Cache: MISS` for easy verification.
+
+Cache invalidation is triggered:
+
+- When a new analysis job is enqueued
+- When a job reaches terminal status (`completed`, `failed`, `partial`)
+
+This keeps dashboard/repository/graph reads fast while preserving correctness.
+
+Detailed implementation guide:
+
+- [docs/REDIS_CACHING_AND_DATA_RETRIEVAL.md](docs/REDIS_CACHING_AND_DATA_RETRIEVAL.md)
+
+Quick verification:
+
+1. Call an endpoint above once and confirm `X-Cache: MISS`.
+2. Call it again with the same params and confirm `X-Cache: HIT`.
+3. Enqueue a new analysis and confirm repository/list endpoints return `MISS` again (cache invalidated).
 
 ---
 
