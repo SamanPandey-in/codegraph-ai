@@ -36,6 +36,7 @@ export class PersistenceAgent extends BaseAgent {
     const jobId = input?.jobId || context?.jobId;
     const graph = input?.graph || {};
     const edges = Array.isArray(input?.edges) ? input.edges : [];
+    const functionNodes = input?.functionNodes || {};
     const embeddings = input?.embeddings || {};
     const enriched = input?.enriched || {};
     const topology = input?.topology || {};
@@ -95,7 +96,31 @@ export class PersistenceAgent extends BaseAgent {
       embeddingVectors.push(vectorLiteral);
     }
 
-    const recordsAttempted = nodePaths.length + edgeSourcePaths.length + embeddingPaths.length;
+    const functionNodePaths = [];
+    const functionNodeNames = [];
+    const functionNodeKinds = [];
+    const functionNodeCalls = [];
+    const functionNodeLocs = [];
+
+    for (const [filePath, declarations] of Object.entries(functionNodes)) {
+      if (!Array.isArray(declarations)) continue;
+
+      for (const declaration of declarations) {
+        if (!declaration?.name) continue;
+
+        functionNodePaths.push(filePath);
+        functionNodeNames.push(declaration.name);
+        functionNodeKinds.push(declaration.kind || 'function');
+        functionNodeCalls.push(toJson(Array.isArray(declaration.calls) ? declaration.calls : [], []));
+        functionNodeLocs.push(Number.isFinite(declaration.loc) ? Number(declaration.loc) : null);
+      }
+    }
+
+    const recordsAttempted =
+      nodePaths.length +
+      edgeSourcePaths.length +
+      embeddingPaths.length +
+      functionNodePaths.length;
     let recordsWritten = 0;
 
     let client;
@@ -193,6 +218,44 @@ export class PersistenceAgent extends BaseAgent {
         recordsWritten += embeddingResult.rowCount || 0;
       }
 
+      await client.query('SAVEPOINT after_embeddings');
+
+      if (functionNodePaths.length > 0) {
+        const functionNodeResult = await client.query(
+          `
+            INSERT INTO function_nodes (
+              job_id,
+              file_path,
+              name,
+              kind,
+              calls,
+              loc
+            )
+            SELECT
+              $1,
+              unnest($2::text[]),
+              unnest($3::text[]),
+              unnest($4::text[]),
+              unnest($5::jsonb[]),
+              unnest($6::integer[])
+            ON CONFLICT (job_id, file_path, name) DO UPDATE
+            SET kind = EXCLUDED.kind,
+                calls = EXCLUDED.calls,
+                loc = EXCLUDED.loc
+          `,
+          [
+            jobId,
+            functionNodePaths,
+            functionNodeNames,
+            functionNodeKinds,
+            functionNodeCalls,
+            functionNodeLocs,
+          ],
+        );
+
+        recordsWritten += functionNodeResult.rowCount || 0;
+      }
+
       await client.query('COMMIT');
 
       const confidence = scorePersistence({
@@ -209,6 +272,7 @@ export class PersistenceAgent extends BaseAgent {
             nodes: nodePaths.length,
             edges: edgeSourcePaths.length,
             embeddings: embeddingPaths.length,
+            functionNodes: functionNodePaths.length,
           },
           durationMs: Date.now() - start,
         },

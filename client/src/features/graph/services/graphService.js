@@ -88,6 +88,15 @@ export const graphService = {
     return data;
   },
 
+  getFunctionNodes: async (jobId, filePath) => {
+    if (!jobId) throw new Error('jobId is required to fetch function nodes.');
+    if (!filePath) throw new Error('filePath is required to fetch function nodes.');
+
+    const encodedFilePath = encodeURIComponent(filePath);
+    const { data } = await graphClient.get(`/api/graph/${jobId}/functions/${encodedFilePath}`);
+    return Array.isArray(data) ? data : [];
+  },
+
   validateLocalPath: async (projectPath) => {
     const { data } = await graphClient.post('/api/analyze/local/validate', {
       path: projectPath.trim(),

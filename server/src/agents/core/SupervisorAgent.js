@@ -112,6 +112,7 @@ export class SupervisorAgent {
           repositoryId: input?.repositoryId,
           graph: pipelineData.graph,
           edges: pipelineData.edges,
+          functionNodes: pipelineData.functionNodes,
           enriched: pipelineData.enriched,
           embeddings: pipelineData.embeddings,
           topology: pipelineData.topology,

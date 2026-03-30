@@ -9,6 +9,53 @@ import {
 
 const router = Router();
 
+router.get('/:jobId/functions/*filePath', async (req, res, next) => {
+  const { jobId } = req.params;
+  const wildcardPath = req.params?.filePath;
+  const rawFilePath = Array.isArray(wildcardPath)
+    ? wildcardPath.join('/')
+    : String(wildcardPath || '').trim();
+
+  if (!jobId) {
+    return res.status(400).json({ error: 'jobId is required.' });
+  }
+
+  if (!rawFilePath) {
+    return res.status(400).json({ error: 'filePath is required.' });
+  }
+
+  let filePath = rawFilePath;
+
+  try {
+    filePath = decodeURIComponent(rawFilePath);
+  } catch {
+    filePath = rawFilePath;
+  }
+
+  try {
+    const result = await pgPool.query(
+      `
+        SELECT name, kind, calls, loc
+        FROM function_nodes
+        WHERE job_id = $1 AND file_path = $2
+        ORDER BY name ASC
+      `,
+      [jobId, filePath],
+    );
+
+    return res.status(200).json(
+      result.rows.map((row) => ({
+        name: row.name,
+        kind: row.kind,
+        calls: Array.isArray(row.calls) ? row.calls : [],
+        loc: Number.isFinite(row.loc) ? row.loc : null,
+      })),
+    );
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get('/:jobId', async (req, res, next) => {
   const { jobId } = req.params;
 

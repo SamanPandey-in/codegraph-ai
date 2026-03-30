@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import ReactFlow, {
   Background,
@@ -43,6 +43,7 @@ import {
   selectGraphData,
 } from '../slices/graphSlice';
 import { selectDeadFiles, selectHighlightedNodeIds } from '../../ai/slices/aiSlice';
+import { graphService } from '../services/graphService';
 
 const THEME_COLORS = {
   dark: {
@@ -68,6 +69,19 @@ const THEME_COLORS = {
 const THEME_TEXT = {
   dark: '#E5E5E5',
   light: '#1A1A1A',
+};
+
+const FUNCTION_NODE_STYLE = {
+  dark: {
+    bg: '#111827',
+    border: '#6B7280',
+    text: '#E5E7EB',
+  },
+  light: {
+    bg: '#FFFFFF',
+    border: '#9CA3AF',
+    text: '#111827',
+  },
 };
 
 function getTypeColors(theme) {
@@ -154,6 +168,7 @@ export default function GraphView() {
   const deadFiles = useSelector(selectDeadFiles);
   const themeMode = useSelector(selectThemeMode);
   const graph = rawData?.graph ?? EMPTY_GRAPH;
+  const jobId = rawData?.jobId || null;
   const emptyMessage =
     rawData?.message || 'No JS/TS files found in the selected directory.';
 
@@ -164,10 +179,12 @@ export default function GraphView() {
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const expandedNodesRef = useRef(new Set());
 
   useEffect(() => {
     setNodes(initialNodes);
     setEdges(initialEdges);
+    expandedNodesRef.current = new Set();
   }, [initialEdges, initialNodes, setEdges, setNodes]);
 
   const onConnect = useCallback(
@@ -176,8 +193,85 @@ export default function GraphView() {
   );
 
   const onNodeClick = useCallback(
-    (_e, node) => dispatch(selectNode(node.id)),
-    [dispatch],
+    (_e, node) => {
+      if (!graph[node.id]) return;
+      dispatch(selectNode(node.id));
+    },
+    [dispatch, graph],
+  );
+
+  const onNodeDoubleClick = useCallback(
+    async (_event, node) => {
+      if (!jobId || !graph[node.id]) return;
+      if (expandedNodesRef.current.has(node.id)) return;
+
+      try {
+        const functionDeclarations = await graphService.getFunctionNodes(jobId, node.id);
+
+        const baseStyle = FUNCTION_NODE_STYLE[themeMode] || FUNCTION_NODE_STYLE.dark;
+        const createdNodes = [];
+        const createdEdges = [];
+
+        setNodes((previousNodes) => {
+          const existingIds = new Set(previousNodes.map((existingNode) => existingNode.id));
+
+          functionDeclarations.forEach((fn, index) => {
+            if (!fn?.name) return;
+
+            const childId = `${node.id}::${fn.name}`;
+            if (existingIds.has(childId)) return;
+            existingIds.add(childId);
+
+            createdNodes.push({
+              id: childId,
+              data: {
+                label: fn.name,
+                kind: fn.kind || 'function',
+              },
+              position: {
+                x: node.position.x + 56,
+                y: node.position.y + 56 + index * 36,
+              },
+              draggable: true,
+              style: {
+                background: baseStyle.bg,
+                border: `1px solid ${baseStyle.border}`,
+                borderRadius: 6,
+                color: baseStyle.text,
+                fontSize: 10,
+                padding: '3px 7px',
+                maxWidth: 160,
+              },
+            });
+
+            createdEdges.push({
+              id: `${node.id}>${childId}`,
+              source: node.id,
+              target: childId,
+              animated: false,
+              style: { stroke: baseStyle.border, strokeWidth: 1 },
+            });
+          });
+
+          if (createdNodes.length === 0) return previousNodes;
+          return [...previousNodes, ...createdNodes];
+        });
+
+        if (createdEdges.length > 0) {
+          setEdges((previousEdges) => {
+            const existingIds = new Set(previousEdges.map((edge) => edge.id));
+            const dedupedEdges = createdEdges.filter((edge) => !existingIds.has(edge.id));
+            if (dedupedEdges.length === 0) return previousEdges;
+            return [...previousEdges, ...dedupedEdges];
+          });
+        }
+
+        expandedNodesRef.current.add(node.id);
+      } catch (error) {
+        console.error('Failed to load function nodes:', error);
+      }
+    },
+    [graph, jobId, setEdges, setNodes, themeMode],
   );
 
   if (nodes.length === 0) {
@@ -197,6 +291,7 @@ export default function GraphView() {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onNodeClick={onNodeClick}
+        onNodeDoubleClick={onNodeDoubleClick}
         fitView
         style={{ background: 'transparent' }}
       >
