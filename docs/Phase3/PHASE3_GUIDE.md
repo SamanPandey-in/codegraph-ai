@@ -1048,8 +1048,7 @@ const aiLimiter = rateLimit({
 | Week 3 | Section 6 (dashboard improvements) | Re-analyze + starred repos - Done |
 | Week 4 | Section 7 (shareable links) | Share button in toolbar - Done |
 | Week 4 | Section 9 (test suite) | 70%+ coverage on agents - Done |
-TODO: Validate tests and codes
-| Week 5 | Section 8 (PR integration) | GitHub webhook auto-analyzes PRs |
+| Week 5 | Section 8 (PR integration) | GitHub webhook auto-analyzes PRs - Done |
 | Week 5 | Section 10 (production hardening) | Sentry, CI, plan gates |
 
 ---
