@@ -1,7 +1,16 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { pgPool } from '../../infrastructure/connections.js';
 import GitHubPRService from '../../services/GitHubPRService.js';
 import ImpactAnalysisService from '../../services/ImpactAnalysisService.js';
+
+const prCommentLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many PR comment requests. Please try again later.' },
+});
 
 /**
  * Factory that builds the PR-comment router with injectable dependencies.
@@ -21,7 +30,7 @@ export function createPrCommentRouter({
    * It fetches the PR diff, identifies changed files, finds impacted graph files,
    * and posts a comment with the impact analysis.
    */
-  router.post('/pr-comment', async (req, res, next) => {
+  router.post('/pr-comment', prCommentLimiter, async (req, res, next) => {
     const { jobId } = req.body;
 
     if (!jobId) {

@@ -1,12 +1,29 @@
 import { Router } from 'express';
 import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
+import rateLimit from 'express-rate-limit';
 import { pgPool } from '../../../infrastructure/connections.js';
 import { loadGraphPayloadByJobId } from '../services/graphPayload.service.js';
 
 const router = Router();
 
 const SHARE_VISIBILITY = new Set(['unlisted', 'public']);
+
+const shareLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many share requests. Please try again later.' },
+});
+
+const functionNodesLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Please try again later.' },
+});
 
 function buildShareUrl(token) {
   const baseUrl = String(process.env.CLIENT_URL || 'http://localhost:5173').trim();
@@ -31,7 +48,7 @@ function getAuthUser(req) {
   }
 }
 
-router.get('/:jobId/functions/*', async (req, res, next) => {
+router.get('/:jobId/functions/*', functionNodesLimiter, async (req, res, next) => {
   const { jobId } = req.params;
   const wildcardPath = req.params[0];
   const rawFilePath = String(wildcardPath || '').trim();
@@ -76,7 +93,7 @@ router.get('/:jobId/functions/*', async (req, res, next) => {
   }
 });
 
-router.post('/:jobId/share', async (req, res, next) => {
+router.post('/:jobId/share', shareLimiter, async (req, res, next) => {
   const authUser = getAuthUser(req);
   if (!authUser) {
     return res.status(401).json({ error: 'Authentication required.' });

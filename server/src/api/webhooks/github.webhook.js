@@ -1,10 +1,19 @@
 import crypto from 'node:crypto';
 import express from 'express';
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { pgPool } from '../../infrastructure/connections.js';
 import { enqueueAnalysisJob } from '../../queue/analysisQueue.js';
 
 const router = Router();
+
+const webhookLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many webhook requests.' },
+});
 
 function timingSafeCompare(a, b) {
   const left = Buffer.from(String(a || ''));
@@ -42,7 +51,7 @@ function logWebhookEvent(level, message, context = {}) {
   }
 }
 
-router.post('/github', express.raw({ type: 'application/json' }), async (req, res, next) => {
+router.post('/github', webhookLimiter, express.raw({ type: 'application/json' }), async (req, res, next) => {
   const startTime = Date.now();
   const signature = req.headers['x-github-signature-256'];
   const event = String(req.headers['x-github-event'] || '').trim();
