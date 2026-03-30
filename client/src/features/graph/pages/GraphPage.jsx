@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import GraphToolbar from '../components/GraphToolbar';
 import GraphView from '../components/GraphView';
 import {
+  loadSharedGraph,
   loadSavedGraph,
   selectGraphData,
   selectGraphError,
@@ -33,7 +34,18 @@ export default function GraphPage() {
     return stateJobId || queryJobId || null;
   }, [location.state, searchParams]);
 
+  const shareToken = useMemo(() => {
+    const token = String(searchParams.get('share') || '').trim();
+    return token || null;
+  }, [searchParams]);
+
   useEffect(() => {
+    if (!shareToken) return;
+    dispatch(loadSharedGraph({ token: shareToken }));
+  }, [dispatch, shareToken]);
+
+  useEffect(() => {
+    if (shareToken) return;
     if (!requestedJobId) return;
     if (data?.jobId === requestedJobId) return;
 
@@ -45,7 +57,7 @@ export default function GraphPage() {
         analyzedAt: location.state?.analyzedAt || null,
       }),
     );
-  }, [data?.jobId, dispatch, location.state, requestedJobId]);
+  }, [data?.jobId, dispatch, location.state, requestedJobId, shareToken]);
 
   if (!data && status === 'loading') {
     return (

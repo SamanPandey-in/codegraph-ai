@@ -114,6 +114,44 @@ export const loadSavedGraph = createAsyncThunk(
   },
 );
 
+export const loadSharedGraph = createAsyncThunk(
+  'graph/loadSharedGraph',
+  async ({ token } = {}, { rejectWithValue }) => {
+    try {
+      const normalizedToken = String(token || '').trim();
+      if (!normalizedToken) {
+        throw new Error('A share token is required to load a shared graph.');
+      }
+
+      const graph = await graphService.getSharedGraph(normalizedToken);
+      const jobId = graph?.jobId || null;
+
+      return {
+        ...graph,
+        jobId,
+        rootDir: graph?.rootDir || `shared:${normalizedToken}`,
+        fileCount:
+          Number.isFinite(graph?.topology?.nodeCount)
+            ? graph.topology.nodeCount
+            : 0,
+        message: graph?.message || null,
+        job: {
+          jobId,
+          status: 'completed',
+          nodeCount: graph?.topology?.nodeCount ?? null,
+          edgeCount: graph?.topology?.edgeCount ?? null,
+        },
+      };
+    } catch (err) {
+      const message =
+        err.response?.data?.error ||
+        err.message ||
+        'Failed to load shared analysis graph.';
+      return rejectWithValue(message);
+    }
+  },
+);
+
 const graphSlice = createSlice({
   name: 'graph',
   initialState: {
@@ -170,6 +208,20 @@ const graphSlice = createSlice({
         state.job = action.payload.job || state.job;
       })
       .addCase(loadSavedGraph.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.payload;
+      })
+      .addCase(loadSharedGraph.pending, (state) => {
+        state.status = 'loading';
+        state.error = null;
+        state.selectedNodeId = null;
+      })
+      .addCase(loadSharedGraph.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        state.data = action.payload;
+        state.job = action.payload.job || null;
+      })
+      .addCase(loadSharedGraph.rejected, (state, action) => {
         state.status = 'failed';
         state.error = action.payload;
       });

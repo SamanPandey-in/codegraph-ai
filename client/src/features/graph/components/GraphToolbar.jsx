@@ -1,15 +1,44 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { RotateCcw, Code2, FolderOpen, FileCode2, Maximize2, Minimize2 } from 'lucide-react';
+import {
+  RotateCcw,
+  Code2,
+  FolderOpen,
+  FileCode2,
+  Maximize2,
+  Minimize2,
+  Share2,
+  Loader2,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { graphService } from '../services/graphService';
 import { clearGraph, selectGraphData } from '../slices/graphSlice';
+
+async function copyToClipboard(value) {
+  if (navigator?.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+
+  const element = document.createElement('textarea');
+  element.value = value;
+  element.setAttribute('readonly', '');
+  element.style.position = 'absolute';
+  element.style.left = '-9999px';
+  document.body.appendChild(element);
+  element.select();
+  document.execCommand('copy');
+  document.body.removeChild(element);
+}
 
 export default function GraphToolbar({ graphContainerId = 'graph-container' }) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const data = useSelector(selectGraphData);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+  const [shareFeedback, setShareFeedback] = useState(null);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -20,9 +49,19 @@ export default function GraphToolbar({ graphContainerId = 'graph-container' }) {
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
+  useEffect(() => {
+    if (!shareFeedback) return;
+
+    const timeout = window.setTimeout(() => {
+      setShareFeedback(null);
+    }, 3500);
+
+    return () => window.clearTimeout(timeout);
+  }, [shareFeedback]);
+
   if (!data) return null;
 
-  const { rootDir, fileCount } = data;
+  const { rootDir, fileCount, jobId } = data;
 
   const handleFullscreen = async () => {
     const element = document.getElementById(graphContainerId);
@@ -40,6 +79,32 @@ export default function GraphToolbar({ graphContainerId = 'graph-container' }) {
       }
     } catch (error) {
       console.error('Fullscreen request failed:', error);
+    }
+  };
+
+  const handleShare = async () => {
+    if (!jobId || isSharing) return;
+
+    setIsSharing(true);
+
+    try {
+      const { shareUrl } = await graphService.shareGraph(jobId);
+      if (!shareUrl) {
+        throw new Error('Share URL was not returned by the server.');
+      }
+
+      await copyToClipboard(shareUrl);
+      setShareFeedback({
+        type: 'success',
+        message: 'Share link copied to clipboard.',
+      });
+    } catch (error) {
+      setShareFeedback({
+        type: 'error',
+        message: error?.response?.data?.error || error?.message || 'Failed to create share link.',
+      });
+    } finally {
+      setIsSharing(false);
     }
   };
 
@@ -69,6 +134,26 @@ export default function GraphToolbar({ graphContainerId = 'graph-container' }) {
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
+        {shareFeedback?.message && (
+          <span
+            className={`hidden text-xs md:inline ${
+              shareFeedback.type === 'error' ? 'text-destructive' : 'text-muted-foreground'
+            }`}
+          >
+            {shareFeedback.message}
+          </span>
+        )}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleShare}
+          disabled={!jobId || isSharing}
+          title="Create share link"
+          className="gap-1.5"
+        >
+          {isSharing ? <Loader2 className="size-3.5 animate-spin" /> : <Share2 className="size-3.5" />}
+          Share
+        </Button>
         <Button
           variant="outline"
           size="sm"

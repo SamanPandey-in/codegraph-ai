@@ -12,6 +12,7 @@ import { jobsRouter }                        from './src/api/jobs/index.js';
 import { graphRouter }                       from './src/api/graph/index.js';
 import { aiRouter }                          from './src/api/ai/index.js';
 import { repositoriesRouter }                from './src/api/repositories/index.js';
+import { shareRouter }                       from './src/api/share/index.js';
 
 import { requestLogger }  from './src/utils/logger.js';
 import { notFound }       from './src/middleware/notFound.middleware.js';
@@ -50,6 +51,7 @@ app.use('/api/jobs', jobsRouter);
 app.use('/api/graph', graphRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/repositories', repositoriesRouter);
+app.use('/api', shareRouter);
 
 if (shouldServeClient) {
   app.use(express.static(clientDistPath));
