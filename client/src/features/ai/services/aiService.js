@@ -107,6 +107,28 @@ export const aiService = {
     return data;
   },
 
+  async suggestRefactor({ jobId, filePath }) {
+    const normalizedJobId = normalizeText(jobId);
+    const normalizedFilePath = normalizeText(filePath);
+
+    if (!normalizedJobId || !normalizedFilePath) {
+      throw new Error('suggestRefactor requires jobId and filePath.');
+    }
+
+    const { data } = await aiClient.post('/api/ai/suggest-refactor', {
+      jobId: normalizedJobId,
+      filePath: normalizedFilePath,
+    });
+
+    return {
+      filePath: normalizeText(data?.filePath) || normalizedFilePath,
+      concerns: Array.isArray(data?.concerns) ? data.concerns : [],
+      suggestions: Array.isArray(data?.suggestions) ? data.suggestions : [],
+      priority: normalizeText(data?.priority) || 'medium',
+      estimatedEffort: normalizeText(data?.estimatedEffort) || 'unknown',
+    };
+  },
+
   async streamExplain({ question, jobId, onChunk, onDone, onError, signal } = {}) {
     const normalizedQuestion = normalizeText(question);
     const normalizedJobId = normalizeText(jobId);

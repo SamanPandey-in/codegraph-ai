@@ -41,6 +41,8 @@ import {
   selectNode,
   selectSelectedNodeId,
   selectGraphData,
+  selectHeatmapMode,
+  selectHeatmapHotspots,
 } from '../slices/graphSlice';
 import { selectDeadFiles, selectHighlightedNodeIds } from '../../ai/slices/aiSlice';
 import { graphService } from '../services/graphService';
@@ -120,26 +122,53 @@ function applyDagreLayout(nodes, edges) {
   });
 }
 
-function graphToFlow(graph, highlightedNodeIds, deadFiles, theme = 'dark') {
+function riskToColor(inDegree = 0, loc = 0, riskScore = null) {
+  const hasRiskScore = Number.isFinite(Number(riskScore));
+  const score = hasRiskScore ? Number(riskScore) : (Number(inDegree) || 0) * ((Number(loc) || 0) / 100);
+
+  if (score > 20) return '#ef4444';
+  if (score > 8) return '#f59e0b';
+  return '#22c55e';
+}
+
+function graphToFlow(
+  graph,
+  highlightedNodeIds,
+  deadFiles,
+  theme = 'dark',
+  heatmapMode = false,
+  heatmapHotspots = {},
+) {
   const highlightSet = new Set(highlightedNodeIds || []);
   const deadSet = new Set(deadFiles || []);
   const colors = getTypeColors(theme);
 
-  const nodes = Object.entries(graph).map(([file, { type }]) => ({
-    id: file,
-    data: { label: file },
-    position: { x: 0, y: 0 },
-    style: {
-      ...getTypeStyle(type, theme),
-      boxShadow: highlightSet.has(file)
-        ? '0 0 0 2px rgba(251,191,36,0.95), 0 0 20px rgba(251,191,36,0.45)'
-        : undefined,
-      border: deadSet.has(file)
-        ? '1px dashed rgba(248,113,113,0.9)'
-        : getTypeStyle(type, theme).border,
-      opacity: deadSet.has(file) ? 0.75 : 1,
-    },
-  }));
+  const nodes = Object.entries(graph).map(([file, { type, metrics }]) => {
+    const baseStyle = getTypeStyle(type, theme);
+    const hotspot = heatmapHotspots[file] || null;
+    const heatmapColor = heatmapMode
+      ? riskToColor(hotspot?.inDegree ?? metrics?.inDegree, hotspot?.loc ?? metrics?.loc, hotspot?.riskScore)
+      : null;
+
+    return {
+      id: file,
+      data: { label: file },
+      position: { x: 0, y: 0 },
+      style: {
+        ...baseStyle,
+        background: heatmapColor ? `${heatmapColor}22` : baseStyle.background,
+        boxShadow: highlightSet.has(file)
+          ? '0 0 0 2px rgba(251,191,36,0.95), 0 0 20px rgba(251,191,36,0.45)'
+          : undefined,
+        border: deadSet.has(file)
+          ? '1px dashed rgba(248,113,113,0.9)'
+          : heatmapColor
+            ? `1px solid ${heatmapColor}`
+            : baseStyle.border,
+        opacity: deadSet.has(file) ? 0.75 : 1,
+      },
+    };
+  });
 
   const edges = [];
   for (const [source, { deps }] of Object.entries(graph)) {
@@ -166,6 +195,8 @@ export default function GraphView() {
   const selectedNodeId = useSelector(selectSelectedNodeId);
   const highlightedNodeIds = useSelector(selectHighlightedNodeIds);
   const deadFiles = useSelector(selectDeadFiles);
+  const heatmapMode = useSelector(selectHeatmapMode);
+  const heatmapHotspots = useSelector(selectHeatmapHotspots);
   const themeMode = useSelector(selectThemeMode);
   const graph = rawData?.graph ?? EMPTY_GRAPH;
   const jobId = rawData?.jobId || null;
@@ -173,8 +204,8 @@ export default function GraphView() {
     rawData?.message || 'No JS/TS files found in the selected directory.';
 
   const { nodes: initialNodes, edges: initialEdges } = useMemo(
-    () => graphToFlow(graph, highlightedNodeIds, deadFiles, themeMode),
-    [graph, highlightedNodeIds, deadFiles, themeMode],
+    () => graphToFlow(graph, highlightedNodeIds, deadFiles, themeMode, heatmapMode, heatmapHotspots),
+    [graph, highlightedNodeIds, deadFiles, themeMode, heatmapMode, heatmapHotspots],
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
@@ -320,6 +351,15 @@ export default function GraphView() {
       >
         <MiniMap
           nodeColor={(n) => {
+            if (heatmapMode) {
+              const metrics = graph[n.id]?.metrics || {};
+              const hotspot = heatmapHotspots[n.id] || null;
+              return riskToColor(
+                hotspot?.inDegree ?? metrics?.inDegree,
+                hotspot?.loc ?? metrics?.loc,
+                hotspot?.riskScore,
+              );
+            }
             const colors = getTypeColors(themeMode);
             return (colors[graph[n.id]?.type] || colors.module).border;
           }}
@@ -330,12 +370,30 @@ export default function GraphView() {
         <Background color="rgb(var(--foreground) / 0.05)" gap={20} />
 
         <div className="absolute bottom-14 left-3 z-10 rounded-lg border border-border bg-card/90 backdrop-blur-sm p-3 text-[11px] shadow-lg">
-          {Object.entries(getTypeColors(themeMode)).map(([type, { border }]) => (
-            <div key={type} className="flex items-center gap-2 mb-1 last:mb-0">
-              <span className="inline-block size-2.5 rounded-sm shrink-0" style={{ background: border }} />
-              <span className="text-muted-foreground capitalize">{type}</span>
-            </div>
-          ))}
+          {heatmapMode ? (
+            <>
+              <div className="mb-2 text-muted-foreground font-medium">Complexity heatmap</div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="inline-block size-2.5 rounded-sm shrink-0" style={{ background: '#22c55e' }} />
+                <span className="text-muted-foreground">Low risk</span>
+              </div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="inline-block size-2.5 rounded-sm shrink-0" style={{ background: '#f59e0b' }} />
+                <span className="text-muted-foreground">Medium risk</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="inline-block size-2.5 rounded-sm shrink-0" style={{ background: '#ef4444' }} />
+                <span className="text-muted-foreground">High risk</span>
+              </div>
+            </>
+          ) : (
+            Object.entries(getTypeColors(themeMode)).map(([type, { border }]) => (
+              <div key={type} className="flex items-center gap-2 mb-1 last:mb-0">
+                <span className="inline-block size-2.5 rounded-sm shrink-0" style={{ background: border }} />
+                <span className="text-muted-foreground capitalize">{type}</span>
+              </div>
+            ))
+          )}
         </div>
       </ReactFlow>
 

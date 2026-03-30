@@ -5,6 +5,7 @@ import OpenAI from 'openai';
 import { QueryAgent } from '../../../agents/query/QueryAgent.js';
 import { AnalysisAgent } from '../../../agents/analysis/AnalysisAgent.js';
 import { pgPool, redisClient } from '../../../infrastructure/connections.js';
+import { requirePlan } from '../../../middleware/planGuard.middleware.js';
 
 const router = Router();
 const openaiClient = process.env.OPENAI_API_KEY
@@ -135,6 +136,91 @@ function toGraphFromRows(nodeRows = [], edgeRows = []) {
 }
 
 router.use(aiLimiter);
+
+router.post('/suggest-refactor', requirePlan('pro', 'team'), async (req, res, next) => {
+  const jobId = String(req.body?.jobId || '').trim();
+  const filePath = String(req.body?.filePath || '').trim();
+
+  if (!jobId || !filePath) {
+    return res.status(400).json({ error: 'jobId and filePath are required.' });
+  }
+
+  try {
+    const nodeResult = await pgPool.query(
+      `
+        SELECT file_path, file_type, declarations, metrics, summary
+        FROM graph_nodes
+        WHERE job_id = $1 AND file_path = $2
+        LIMIT 1
+      `,
+      [jobId, filePath],
+    );
+
+    if (nodeResult.rowCount === 0) {
+      return res.status(404).json({ error: 'File not found.' });
+    }
+
+    if (!openaiClient) {
+      return res.status(503).json({ error: 'OpenAI is not configured.' });
+    }
+
+    const node = nodeResult.rows[0];
+    const exportsList = (node.declarations || []).map((declaration) => declaration?.name).filter(Boolean);
+
+    const prompt = `You are a senior software architect reviewing a file in a dependency graph analysis.
+
+File: ${node.file_path}
+Type: ${node.file_type}
+Lines of code: ${node.metrics?.loc || 'unknown'}
+In-degree (files that import this): ${node.metrics?.inDegree || 0}
+Out-degree (files this imports): ${node.metrics?.outDegree || 0}
+Exports: ${exportsList.join(', ') || 'none'}
+Summary: ${node.summary || 'no summary available'}
+
+Respond with a JSON object:
+{
+  "concerns": ["list of specific architectural concerns"],
+  "suggestions": ["list of concrete refactoring steps"],
+  "priority": "high | medium | low",
+  "estimatedEffort": "hours estimate as a string, e.g. '2-4 hours'"
+}
+Only respond with the JSON object.`;
+
+    const response = await openaiClient.chat.completions.create({
+      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      max_tokens: 400,
+      temperature: 0.2,
+      messages: [{ role: 'user', content: prompt }],
+    });
+
+    const content = response?.choices?.[0]?.message?.content?.trim() || '';
+
+    let parsed;
+    try {
+      parsed = JSON.parse(content);
+    } catch {
+      parsed = {
+        concerns: [],
+        suggestions: content ? [content] : [],
+        priority: 'medium',
+        estimatedEffort: 'unknown',
+      };
+    }
+
+    return res.status(200).json({
+      filePath,
+      concerns: Array.isArray(parsed?.concerns) ? parsed.concerns : [],
+      suggestions: Array.isArray(parsed?.suggestions) ? parsed.suggestions : [],
+      priority: ['high', 'medium', 'low'].includes(parsed?.priority) ? parsed.priority : 'medium',
+      estimatedEffort:
+        typeof parsed?.estimatedEffort === 'string' && parsed.estimatedEffort.trim()
+          ? parsed.estimatedEffort.trim()
+          : 'unknown',
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
 
 router.get('/queries', async (req, res, next) => {
   const authUser = getAuthUser(req);

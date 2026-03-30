@@ -6,6 +6,7 @@ import {
   Code2,
   FolderOpen,
   FileCode2,
+  Flame,
   Maximize2,
   Minimize2,
   Share2,
@@ -13,7 +14,13 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { graphService } from '../services/graphService';
-import { clearGraph, selectGraphData } from '../slices/graphSlice';
+import {
+  clearGraph,
+  selectGraphData,
+  selectHeatmapMode,
+  setHeatmapHotspots,
+  setHeatmapMode,
+} from '../slices/graphSlice';
 
 async function copyToClipboard(value) {
   if (navigator?.clipboard?.writeText) {
@@ -36,8 +43,10 @@ export default function GraphToolbar({ graphContainerId = 'graph-container' }) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const data = useSelector(selectGraphData);
+  const heatmapMode = useSelector(selectHeatmapMode);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
+  const [isHeatmapLoading, setIsHeatmapLoading] = useState(false);
   const [shareFeedback, setShareFeedback] = useState(null);
 
   useEffect(() => {
@@ -108,6 +117,30 @@ export default function GraphToolbar({ graphContainerId = 'graph-container' }) {
     }
   };
 
+  const handleHeatmapToggle = async () => {
+    if (!jobId || isHeatmapLoading) return;
+
+    if (heatmapMode) {
+      dispatch(setHeatmapMode(false));
+      return;
+    }
+
+    setIsHeatmapLoading(true);
+
+    try {
+      const { hotspots } = await graphService.getHeatmap(jobId);
+      dispatch(setHeatmapHotspots(hotspots));
+      dispatch(setHeatmapMode(true));
+    } catch (error) {
+      setShareFeedback({
+        type: 'error',
+        message: error?.response?.data?.error || error?.message || 'Failed to load heatmap data.',
+      });
+    } finally {
+      setIsHeatmapLoading(false);
+    }
+  };
+
   return (
     <header className="flex items-center justify-between gap-4 px-4 py-2.5 border-b border-border bg-background/80 backdrop-blur-sm shrink-0">
       <div className="flex items-center gap-3 min-w-0">
@@ -143,6 +176,21 @@ export default function GraphToolbar({ graphContainerId = 'graph-container' }) {
             {shareFeedback.message}
           </span>
         )}
+        <Button
+          variant={heatmapMode ? 'default' : 'outline'}
+          size="sm"
+          onClick={handleHeatmapToggle}
+          disabled={!jobId || isHeatmapLoading}
+          title={heatmapMode ? 'Disable complexity heatmap' : 'Enable complexity heatmap'}
+          className="gap-1.5"
+        >
+          {isHeatmapLoading ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            <Flame className="size-3.5" />
+          )}
+          Heatmap
+        </Button>
         <Button
           variant="outline"
           size="sm"

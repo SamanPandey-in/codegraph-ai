@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { X, AlertTriangle, Loader2, Zap } from 'lucide-react';
+import { X, AlertTriangle, Loader2, Zap, Wrench } from 'lucide-react';
 import {
   analyzeImpact,
   selectAiImpactState,
@@ -16,6 +16,9 @@ export default function AiPanel({ nodeId, graph, onClose }) {
   const [streamedText, setStreamedText] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamError, setStreamError] = useState('');
+  const [isLoadingRefactor, setIsLoadingRefactor] = useState(false);
+  const [refactorError, setRefactorError] = useState('');
+  const [refactorSuggestion, setRefactorSuggestion] = useState(null);
 
   const nodeData = nodeId ? graph?.[nodeId] : null;
 
@@ -33,6 +36,8 @@ export default function AiPanel({ nodeId, graph, onClose }) {
     setStreamedText('');
     setIsStreaming(true);
     setStreamError('');
+    setRefactorSuggestion(null);
+    setRefactorError('');
 
     aiService
       .streamExplain({
@@ -78,6 +83,27 @@ export default function AiPanel({ nodeId, graph, onClose }) {
     dispatch(analyzeImpact({ jobId, filePath: nodeId }));
   };
 
+  const handleSuggestRefactor = async () => {
+    if (!jobId || !nodeId || isLoadingRefactor) return;
+
+    setIsLoadingRefactor(true);
+    setRefactorError('');
+
+    try {
+      const result = await aiService.suggestRefactor({
+        jobId,
+        filePath: nodeId,
+      });
+
+      setRefactorSuggestion(result);
+    } catch (error) {
+      setRefactorSuggestion(null);
+      setRefactorError(error?.response?.data?.error || error?.message || 'Failed to load suggestions.');
+    } finally {
+      setIsLoadingRefactor(false);
+    }
+  };
+
   return (
     <div className="absolute top-2 right-2 z-10 w-80 max-h-[85vh] overflow-y-auto rounded-xl border border-border bg-card/95 backdrop-blur-sm p-4 text-xs shadow-xl transition-all">
       <div className="flex items-start justify-between gap-2 mb-3">
@@ -121,6 +147,66 @@ export default function AiPanel({ nodeId, graph, onClose }) {
         )}
         {streamedText && (
           <p className="text-foreground/90 leading-relaxed whitespace-pre-wrap">{streamedText}</p>
+        )}
+      </div>
+
+      <div className="mb-3 rounded-lg border border-border bg-background/40 p-3">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <p className="text-muted-foreground/60 uppercase tracking-wider text-[10px] flex items-center gap-1">
+            <Wrench className="size-3" /> Refactor Suggestions
+          </p>
+          <button
+            type="button"
+            onClick={handleSuggestRefactor}
+            disabled={!jobId || isLoadingRefactor}
+            className="text-[10px] text-primary/70 hover:text-primary disabled:opacity-40 transition-colors"
+          >
+            {isLoadingRefactor ? 'Analyzing...' : 'Suggest refactor ->'}
+          </button>
+        </div>
+
+        {isLoadingRefactor && (
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Loader2 className="size-3 animate-spin" />
+            <span>Evaluating architecture risk...</span>
+          </div>
+        )}
+
+        {refactorError && (
+          <p className="text-red-400 flex items-center gap-1">
+            <AlertTriangle className="size-3" /> {refactorError}
+          </p>
+        )}
+
+        {refactorSuggestion && !isLoadingRefactor && !refactorError && (
+          <div className="space-y-2">
+            <p className="text-foreground/80">
+              Priority: <span className="uppercase">{refactorSuggestion.priority || 'medium'}</span>
+              {' '}· Effort: <span>{refactorSuggestion.estimatedEffort || 'unknown'}</span>
+            </p>
+
+            {refactorSuggestion.concerns?.length > 0 && (
+              <div>
+                <p className="mb-1 text-muted-foreground/60 uppercase tracking-wider text-[10px]">Concerns</p>
+                <ul className="list-disc pl-4 space-y-1 text-foreground/90">
+                  {refactorSuggestion.concerns.map((item, index) => (
+                    <li key={`concern-${index}`}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {refactorSuggestion.suggestions?.length > 0 && (
+              <div>
+                <p className="mb-1 text-muted-foreground/60 uppercase tracking-wider text-[10px]">Suggestions</p>
+                <ul className="list-disc pl-4 space-y-1 text-foreground/90">
+                  {refactorSuggestion.suggestions.map((item, index) => (
+                    <li key={`suggestion-${index}`}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
         )}
       </div>
 

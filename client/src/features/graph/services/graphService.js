@@ -88,6 +88,17 @@ export const graphService = {
     return data;
   },
 
+  getHeatmap: async (jobId) => {
+    if (!jobId) {
+      throw new Error('jobId is required to fetch heatmap data.');
+    }
+
+    const { data } = await graphClient.get(`/api/graph/${jobId}/heatmap`);
+    return {
+      hotspots: Array.isArray(data?.hotspots) ? data.hotspots : [],
+    };
+  },
+
   getSharedGraph: async (token) => {
     if (!token) {
       throw new Error('A share token is required to load a shared graph.');

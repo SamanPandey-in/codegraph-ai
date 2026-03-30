@@ -157,6 +157,8 @@ const graphSlice = createSlice({
   initialState: {
     data: null,
     job: null,
+    heatmapMode: false,
+    heatmapHotspots: {},
     selectedNodeId: null,
     status: 'idle',
     error: null,
@@ -171,9 +173,27 @@ const graphSlice = createSlice({
     selectNode(state, action) {
       state.selectedNodeId = action.payload;
     },
+    setHeatmapMode(state, action) {
+      state.heatmapMode = Boolean(action.payload);
+    },
+    setHeatmapHotspots(state, action) {
+      const hotspots = Array.isArray(action.payload) ? action.payload : [];
+      state.heatmapHotspots = hotspots.reduce((acc, hotspot) => {
+        const filePath = String(hotspot?.filePath || '').trim();
+        if (!filePath) return acc;
+        acc[filePath] = {
+          riskScore: Number(hotspot?.riskScore) || 0,
+          inDegree: Number(hotspot?.inDegree) || 0,
+          loc: Number(hotspot?.loc) || 0,
+        };
+        return acc;
+      }, {});
+    },
     clearGraph(state) {
       state.data = null;
       state.job = null;
+      state.heatmapMode = false;
+      state.heatmapHotspots = {};
       state.selectedNodeId = null;
       state.status = 'idle';
       state.error = null;
@@ -186,12 +206,16 @@ const graphSlice = createSlice({
         state.error = null;
         state.data = null;
         state.job = null;
+        state.heatmapMode = false;
+        state.heatmapHotspots = {};
         state.selectedNodeId = null;
       })
       .addCase(analyzeCodebase.fulfilled, (state, action) => {
         state.status = 'succeeded';
         state.data = action.payload;
         state.job = action.payload.job || state.job;
+        state.heatmapMode = false;
+        state.heatmapHotspots = {};
       })
       .addCase(analyzeCodebase.rejected, (state, action) => {
         state.status = 'failed';
@@ -206,6 +230,8 @@ const graphSlice = createSlice({
         state.status = 'succeeded';
         state.data = action.payload;
         state.job = action.payload.job || state.job;
+        state.heatmapMode = false;
+        state.heatmapHotspots = {};
       })
       .addCase(loadSavedGraph.rejected, (state, action) => {
         state.status = 'failed';
@@ -220,6 +246,8 @@ const graphSlice = createSlice({
         state.status = 'succeeded';
         state.data = action.payload;
         state.job = action.payload.job || null;
+        state.heatmapMode = false;
+        state.heatmapHotspots = {};
       })
       .addCase(loadSharedGraph.rejected, (state, action) => {
         state.status = 'failed';
@@ -228,12 +256,20 @@ const graphSlice = createSlice({
   },
 });
 
-export const { updateAnalysisJob, selectNode, clearGraph } = graphSlice.actions;
+export const {
+  updateAnalysisJob,
+  selectNode,
+  setHeatmapMode,
+  setHeatmapHotspots,
+  clearGraph,
+} = graphSlice.actions;
 
 export const selectGraphData = (state) => state.graph.data;
 export const selectAnalysisJob = (state) => state.graph.job;
 export const selectGraphStatus = (state) => state.graph.status;
 export const selectGraphError = (state) => state.graph.error;
 export const selectSelectedNodeId = (state) => state.graph.selectedNodeId;
+export const selectHeatmapMode = (state) => state.graph.heatmapMode;
+export const selectHeatmapHotspots = (state) => state.graph.heatmapHotspots;
 
 export default graphSlice.reducer;

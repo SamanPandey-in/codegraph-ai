@@ -161,6 +161,40 @@ router.post('/:jobId/share', shareLimiter, async (req, res, next) => {
   }
 });
 
+router.get('/:jobId/heatmap', async (req, res, next) => {
+  const { jobId } = req.params;
+
+  if (!jobId) {
+    return res.status(400).json({ error: 'jobId is required.' });
+  }
+
+  try {
+    const result = await pgPool.query(
+      `
+        SELECT file_path, file_type, metrics,
+               (metrics->>'inDegree')::int * COALESCE((metrics->>'complexity')::numeric, 1) AS risk_score
+        FROM graph_nodes
+        WHERE job_id = $1
+        ORDER BY risk_score DESC
+        LIMIT 50
+      `,
+      [jobId],
+    );
+
+    return res.status(200).json({
+      hotspots: result.rows.map((row) => ({
+        filePath: row.file_path,
+        type: row.file_type,
+        riskScore: Number.parseFloat(row.risk_score) || 0,
+        inDegree: Number(row.metrics?.inDegree) || 0,
+        loc: Number(row.metrics?.loc) || 0,
+      })),
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get('/:jobId', async (req, res, next) => {
   const { jobId } = req.params;
 
