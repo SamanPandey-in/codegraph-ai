@@ -59,19 +59,26 @@ class GitHubPRService {
     const changedFiles = [];
     const lines = diff.split('\n');
 
-    for (const line of lines) {
+    for (let i = 0; i < lines.length; i++) {
       // Matches: "diff --git a/path/file.js b/path/file.js"
-      const match = line.match(/^diff --git a\/(.*?) b\/(.*?)$/);
+      const match = lines[i].match(/^diff --git a\/(.*?) b\/(.*?)$/);
       if (!match) continue;
 
       const filePath = match[2];
 
-      // Determine status from next lines
+      // Determine status by scanning forward until the next "diff --git" header
+      // to avoid misidentifying files when multiple files have status markers
       let status = 'modified';
-      if (diff.includes(`new file mode`) && diff.lastIndexOf(`new file mode`) > diff.indexOf(line)) {
-        status = 'added';
-      } else if (diff.includes(`deleted file mode`) && diff.lastIndexOf(`deleted file mode`) > diff.indexOf(line)) {
-        status = 'deleted';
+      for (let j = i + 1; j < lines.length; j++) {
+        if (lines[j].startsWith('diff --git ')) break;
+        if (lines[j].startsWith('new file mode')) {
+          status = 'added';
+          break;
+        }
+        if (lines[j].startsWith('deleted file mode')) {
+          status = 'deleted';
+          break;
+        }
       }
 
       changedFiles.push({
@@ -223,4 +230,5 @@ ${impactedList}
   }
 }
 
+export { GitHubPRService };
 export default new GitHubPRService();

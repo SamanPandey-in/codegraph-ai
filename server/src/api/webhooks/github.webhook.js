@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import express from 'express';
 import { Router } from 'express';
 import { pgPool } from '../../infrastructure/connections.js';
 import { enqueueAnalysisJob } from '../../queue/analysisQueue.js';
@@ -41,7 +42,7 @@ function logWebhookEvent(level, message, context = {}) {
   }
 }
 
-router.post('/github', async (req, res, next) => {
+router.post('/github', express.raw({ type: 'application/json' }), async (req, res, next) => {
   const startTime = Date.now();
   const signature = req.headers['x-github-signature-256'];
   const event = String(req.headers['x-github-event'] || '').trim();

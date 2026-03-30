@@ -1,9 +1,9 @@
-import { describe, it, before, after } from 'node:test';
+import { describe, it, before } from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
 import request from 'supertest';
-import prCommentRouter from '../src/api/webhooks/pr-comment.routes.js';
-import GitHubPRService from '../src/services/GitHubPRService.js';
+import { createPrCommentRouter } from '../src/api/webhooks/pr-comment.routes.js';
+import { GitHubPRService } from '../src/services/GitHubPRService.js';
 
 // Mock dependencies
 const mockPgPool = {
@@ -23,6 +23,23 @@ const mockPgPool = {
               github_repo: 'myrepo',
               prNumber: '42',
               prTitle: 'Add new UI',
+            },
+          ],
+        };
+      }
+      if (params[0] === 'non-github-job') {
+        return {
+          rowCount: 1,
+          rows: [
+            {
+              id: 'non-github-job',
+              status: 'complete',
+              branch: 'main',
+              repositoryId: 'repo-456',
+              github_owner: null,
+              github_repo: null,
+              prNumber: null,
+              prTitle: null,
             },
           ],
         };
@@ -48,7 +65,7 @@ describe('PR Comment Posting', () => {
 
     app = express();
     app.use(express.json());
-    app.use('/api/webhooks/github', prCommentRouter);
+    app.use('/api/webhooks/github', createPrCommentRouter({ db: mockPgPool }));
   });
 
   describe('POST /api/webhooks/github/pr-comment', () => {
@@ -81,7 +98,16 @@ describe('PR Comment Posting', () => {
       const oldToken = process.env.GITHUB_TOKEN;
       delete process.env.GITHUB_TOKEN;
 
-      const response = await request(app)
+      // Create a service instance without a token to simulate missing token
+      const noTokenService = new GitHubPRService();
+      const testApp = express();
+      testApp.use(express.json());
+      testApp.use(
+        '/api/webhooks/github',
+        createPrCommentRouter({ db: mockPgPool, gitHubPRService: noTokenService }),
+      );
+
+      const response = await request(testApp)
         .post('/api/webhooks/github/pr-comment')
         .send({ jobId: 'valid-job-id' });
 
@@ -106,7 +132,15 @@ describe('PR Comment Posting', () => {
       const oldToken = process.env.GITHUB_TOKEN;
       delete process.env.GITHUB_TOKEN;
 
-      const response = await request(app)
+      const noTokenService = new GitHubPRService();
+      const testApp = express();
+      testApp.use(express.json());
+      testApp.use(
+        '/api/webhooks/github',
+        createPrCommentRouter({ db: mockPgPool, gitHubPRService: noTokenService }),
+      );
+
+      const response = await request(testApp)
         .get('/api/webhooks/github/pr-status/42')
         .query({ owner: 'myorg', repo: 'myrepo' });
 
@@ -120,6 +154,7 @@ describe('PR Comment Posting', () => {
 describe('GitHubPRService', () => {
   describe('parseDiff', () => {
     it('extracts changed files from diff', () => {
+      const service = new GitHubPRService();
       const diff = `diff --git a/src/app.js b/src/app.js
 index 1234567..abcdefg 100644
 --- a/src/app.js
@@ -139,34 +174,64 @@ index 0000000..1234567
 +};
 `;
 
-      const files = GitHubPRService.parseDiff(diff);
+      const files = service.parseDiff(diff);
 
       assert.equal(files.length, 2);
       assert.ok(files.some((f) => f.file === 'src/app.js'));
       assert.ok(files.some((f) => f.file === 'src/config.js'));
     });
 
+    it('correctly labels added vs modified files', () => {
+      const service = new GitHubPRService();
+      const diff = `diff --git a/src/app.js b/src/app.js
+index 1234567..abcdefg 100644
+--- a/src/app.js
++++ b/src/app.js
+@@ -1,5 +1,6 @@
+ const express = require('express');
++const newLib = require('new-lib');
+
+diff --git a/src/config.js b/src/config.js
+new file mode 100644
+index 0000000..1234567
+--- /dev/null
++++ b/src/config.js
+@@ -0,0 +1,3 @@
++module.exports = {};
+`;
+
+      const files = service.parseDiff(diff);
+      const appFile = files.find((f) => f.file === 'src/app.js');
+      const configFile = files.find((f) => f.file === 'src/config.js');
+
+      assert.equal(appFile.status, 'modified');
+      assert.equal(configFile.status, 'added');
+    });
+
     it('returns empty array for empty diff', () => {
-      const files = GitHubPRService.parseDiff('');
+      const service = new GitHubPRService();
+      const files = service.parseDiff('');
       assert.equal(files.length, 0);
     });
 
     it('handles diffs without file changes', () => {
+      const service = new GitHubPRService();
       const diff = `
 Some text without proper diff format
 `;
-      const files = GitHubPRService.parseDiff(diff);
+      const files = service.parseDiff(diff);
       assert.equal(files.length, 0);
     });
   });
 
   describe('formatImpactComment', () => {
     it('formats impact comment with changed and impacted files', () => {
+      const service = new GitHubPRService();
       const changed = ['src/auth.js', 'src/config.js'];
       const impacted = ['src/api.js', 'src/middleware.js', 'src/controllers/user.js'];
       const graphUrl = 'http://localhost:5173/?jobId=123';
 
-      const comment = GitHubPRService.formatImpactComment(changed, impacted, graphUrl);
+      const comment = service.formatImpactComment(changed, impacted, graphUrl);
 
       assert.match(comment, /CodeGraph Impact Analysis/);
       assert.match(comment, /Changed Files \(2\)/);
@@ -177,31 +242,34 @@ Some text without proper diff format
     });
 
     it('handles empty impacted files list', () => {
+      const service = new GitHubPRService();
       const changed = ['src/util.js'];
       const impacted = [];
       const graphUrl = 'http://localhost:5173/?jobId=123';
 
-      const comment = GitHubPRService.formatImpactComment(changed, impacted, graphUrl);
+      const comment = service.formatImpactComment(changed, impacted, graphUrl);
 
       assert.match(comment, /isolated change/i);
     });
 
     it('truncates large file lists', () => {
+      const service = new GitHubPRService();
       const changed = Array.from({ length: 30 }, (_, i) => `file${i}.js`);
       const impacted = Array.from({ length: 30 }, (_, i) => `impacted${i}.js`);
       const graphUrl = 'http://localhost:5173/?jobId=123';
 
-      const comment = GitHubPRService.formatImpactComment(changed, impacted, graphUrl);
+      const comment = service.formatImpactComment(changed, impacted, graphUrl);
 
       assert.match(comment, /and \d+ more/); // Should have "and X more"
     });
 
     it('includes timestamp in comment', () => {
+      const service = new GitHubPRService();
       const changed = ['src/app.js'];
       const impacted = [];
       const graphUrl = 'http://localhost:5173/?jobId=123';
 
-      const comment = GitHubPRService.formatImpactComment(changed, impacted, graphUrl);
+      const comment = service.formatImpactComment(changed, impacted, graphUrl);
 
       assert.match(comment, /\d{4}-\d{2}-\d{2}T/); // ISO date format
     });
@@ -211,10 +279,8 @@ Some text without proper diff format
     it('detects when GitHub token is configured', () => {
       const oldToken = process.env.GITHUB_TOKEN;
       process.env.GITHUB_TOKEN = 'test-token';
-
-      const service = require('../src/services/GitHubPRService.js').default;
+      const service = new GitHubPRService();
       assert.equal(service.isConfigured(), true);
-
       process.env.GITHUB_TOKEN = oldToken;
     });
 
@@ -222,7 +288,7 @@ Some text without proper diff format
       const oldToken = process.env.GITHUB_TOKEN;
       delete process.env.GITHUB_TOKEN;
 
-      const service = require('../src/services/GitHubPRService.js').default;
+      const service = new GitHubPRService();
       assert.equal(service.isConfigured(), false);
 
       process.env.GITHUB_TOKEN = oldToken;

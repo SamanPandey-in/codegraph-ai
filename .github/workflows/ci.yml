@@ -34,8 +34,16 @@ jobs:
         working-directory: server
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/codegraph_test
-      - name: Run tests
+      - name: Run Vitest unit tests
         run: npm run test:coverage
+        working-directory: server
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/codegraph_test
+          REDIS_URL: redis://localhost:6379
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          JWT_SECRET: test_secret
+      - name: Run Node integration tests
+        run: npm test
         working-directory: server
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/codegraph_test

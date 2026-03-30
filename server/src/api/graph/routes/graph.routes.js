@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import crypto from 'node:crypto';
+import jwt from 'jsonwebtoken';
 import { pgPool } from '../../../infrastructure/connections.js';
 import { loadGraphPayloadByJobId } from '../services/graphPayload.service.js';
 
@@ -19,12 +20,21 @@ function buildShareUrl(token) {
   }
 }
 
-router.get('/:jobId/functions/*filePath', async (req, res, next) => {
+function getAuthUser(req) {
+  const token = req.cookies?.token || req.headers.authorization?.replace('Bearer ', '');
+  if (!token || !process.env.JWT_SECRET) return null;
+
+  try {
+    return jwt.verify(token, process.env.JWT_SECRET);
+  } catch {
+    return null;
+  }
+}
+
+router.get('/:jobId/functions/*', async (req, res, next) => {
   const { jobId } = req.params;
-  const wildcardPath = req.params?.filePath;
-  const rawFilePath = Array.isArray(wildcardPath)
-    ? wildcardPath.join('/')
-    : String(wildcardPath || '').trim();
+  const wildcardPath = req.params[0];
+  const rawFilePath = String(wildcardPath || '').trim();
 
   if (!jobId) {
     return res.status(400).json({ error: 'jobId is required.' });
@@ -67,6 +77,11 @@ router.get('/:jobId/functions/*filePath', async (req, res, next) => {
 });
 
 router.post('/:jobId/share', async (req, res, next) => {
+  const authUser = getAuthUser(req);
+  if (!authUser) {
+    return res.status(401).json({ error: 'Authentication required.' });
+  }
+
   const { jobId } = req.params;
   const visibility = String(req.body?.visibility || 'unlisted').trim().toLowerCase();
   const expiresAtInput = req.body?.expiresAt;
@@ -91,6 +106,21 @@ router.post('/:jobId/share', async (req, res, next) => {
   const token = crypto.randomBytes(24).toString('base64url');
 
   try {
+    // Verify the job belongs to the authenticated user
+    const jobCheck = await pgPool.query(
+      `
+        SELECT id
+        FROM analysis_jobs
+        WHERE id = $1 AND user_id = $2
+        LIMIT 1
+      `,
+      [jobId, authUser.id],
+    );
+
+    if (jobCheck.rowCount === 0) {
+      return res.status(404).json({ error: 'Analysis job not found.' });
+    }
+
     const inserted = await pgPool.query(
       `
         INSERT INTO graph_shares (job_id, token, visibility, expires_at)

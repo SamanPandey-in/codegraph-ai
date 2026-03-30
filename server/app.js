@@ -38,7 +38,6 @@ app.use(
 );
 
 app.use(cookieParser());
-app.use('/api/webhooks/github', express.raw({ type: 'application/json' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(requestLogger);
