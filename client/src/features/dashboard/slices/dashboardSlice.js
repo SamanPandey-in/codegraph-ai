@@ -45,6 +45,22 @@ export const fetchRepositoryJobs = createAsyncThunk(
   },
 );
 
+export const toggleRepositoryStar = createAsyncThunk(
+  'dashboard/toggleRepositoryStar',
+  async ({ repositoryId } = {}, { rejectWithValue }) => {
+    try {
+      return await dashboardService.toggleStar(repositoryId);
+    } catch (err) {
+      const backendError = err?.response?.data?.error;
+      return rejectWithValue({
+        repositoryId,
+        code: 'REQUEST_FAILED',
+        message: backendError || err?.message || 'Failed to update repository star.',
+      });
+    }
+  },
+);
+
 const initialState = {
   repositories: [],
   summary: {
@@ -114,6 +130,33 @@ const dashboardSlice = createSlice({
             message: 'Could not load repository jobs.',
           },
         };
+      })
+      .addCase(toggleRepositoryStar.pending, (state, action) => {
+        const repositoryId = action.meta.arg?.repositoryId;
+        if (!repositoryId) return;
+
+        const repository = state.repositories.find((repo) => repo.id === repositoryId);
+        if (repository) {
+          repository.isStarred = !repository.isStarred;
+        }
+      })
+      .addCase(toggleRepositoryStar.fulfilled, (state, action) => {
+        const repositoryId = action.payload?.id;
+        if (!repositoryId) return;
+
+        const repository = state.repositories.find((repo) => repo.id === repositoryId);
+        if (repository) {
+          repository.isStarred = Boolean(action.payload.isStarred);
+        }
+      })
+      .addCase(toggleRepositoryStar.rejected, (state, action) => {
+        const repositoryId = action.payload?.repositoryId || action.meta.arg?.repositoryId;
+        if (!repositoryId) return;
+
+        const repository = state.repositories.find((repo) => repo.id === repositoryId);
+        if (repository) {
+          repository.isStarred = !repository.isStarred;
+        }
       });
   },
 });

@@ -70,6 +70,7 @@ const normalizeRepository = (raw) => {
     language: raw?.language ?? null,
     visibility: raw?.visibility ?? null,
     status: raw?.status ?? raw?.latestJob?.status ?? 'completed',
+    isStarred: raw?.isStarred ?? raw?.is_starred ?? false,
   };
 };
 
@@ -134,6 +135,14 @@ export const dashboardService = {
           }))
         : [],
       pagination: data?.pagination ?? null,
+    };
+  },
+
+  async toggleStar(repositoryId) {
+    const { data } = await dashboardClient.patch(`/api/repositories/${repositoryId}/star`);
+    return {
+      id: data?.id,
+      isStarred: data?.isStarred ?? data?.is_starred ?? false,
     };
   },
 };

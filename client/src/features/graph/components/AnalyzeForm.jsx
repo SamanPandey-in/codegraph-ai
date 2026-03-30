@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { useLocation } from 'react-router-dom';
 import {
   AlertCircle,
   CheckCircle2,
@@ -106,6 +107,7 @@ function GitHubModeToggle({ value, onChange, disabled }) {
 
 export default function AnalyzeForm() {
   const dispatch = useDispatch();
+  const location = useLocation();
   const status = useSelector(selectGraphStatus);
   const { isAuthenticated, loginWithGithub } = useAuth();
 
@@ -143,6 +145,46 @@ export default function AnalyzeForm() {
   const [ownedBranch, setOwnedBranch] = useState('');
 
   const isLoading = status === 'loading';
+
+  // Handle re-analyze: pre-fill form with previous repo configuration
+  useEffect(() => {
+    const reanalyzeConfig = location.state?.reanalyzeConfig;
+    if (!reanalyzeConfig) return;
+
+    const { source: configSource, owner, repo, branch, fullName } = reanalyzeConfig;
+    
+    if (configSource === 'local') {
+      // Re-analyzing local repository
+      setSource('local');
+      if (fullName) {
+        setLocalPath(fullName);
+        setLocalValidationState('idle');
+      }
+    } else if (configSource === 'github' || configSource === 'github-owned' || configSource === 'github-public') {
+      // Re-analyzing GitHub repository
+      // Default to 'owned' mode since we have owner and repo available
+      setSource('github');
+      setGitHubMode('owned');
+      
+      if (owner && repo) {
+        // Pre-populate with the repo data
+        // This allows the form to show selected repo while still allowing branch selection
+        setSelectedOwnedRepo({
+          id: reanalyzeConfig.id,
+          owner,
+          name: repo,
+          fullName: fullName || `${owner}/${repo}`,
+          defaultBranch: branch || 'main',
+        });
+        
+        if (branch) {
+          setOwnedBranch(branch);
+          // Also populate ownedBranches with at least the current branch
+          setOwnedBranches([{ name: branch, isDefault: true }]);
+        }
+      }
+    }
+  }, [location.state?.reanalyzeConfig]);
 
   const filteredOwnedRepos = useMemo(() => {
     const query = repoQuery.trim().toLowerCase();
