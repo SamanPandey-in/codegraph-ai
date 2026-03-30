@@ -7,7 +7,7 @@ CREATE TABLE users (
   username      TEXT NOT NULL,
   email         TEXT,
   avatar_url    TEXT,
-  plan          TEXT NOT NULL DEFAULT 'free',   -- free | pro | team
+  plan          TEXT NOT NULL DEFAULT 'free',   -- all features currently available on free
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

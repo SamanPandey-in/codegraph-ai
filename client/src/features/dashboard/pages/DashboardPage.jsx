@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   Network,
@@ -15,6 +15,8 @@ import {
   ChevronDown,
   ChevronUp,
   Loader2,
+  Star,
+  RotateCcw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,12 +39,14 @@ import { useAuth } from '@/features/auth/context/AuthContext';
 import {
   fetchAnalyzedRepositories,
   fetchRepositoryJobs,
+  toggleRepositoryStar,
   selectAnalyzedRepositories,
   selectDashboardError,
   selectRepositoryJobsById,
   selectDashboardStatus,
   selectDashboardSummary,
 } from '../index';
+import { analyzeCodebase } from '@/features/graph/slices/graphSlice';
 
 const QUICK_ACTIONS = [
   {
@@ -162,6 +166,7 @@ function RepositoryListSkeleton() {
 export default function DashboardPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [sortBy, setSortBy] = useState(() =>
     parseSortFromQuery(searchParams.get('sort')),
@@ -171,6 +176,8 @@ export default function DashboardPage() {
   );
   const [searchTerm, setSearchTerm] = useState(() => searchParams.get('q') || '');
   const [expandedRepos, setExpandedRepos] = useState({});
+  const [starringRepoId, setStarringRepoId] = useState(null);
+  const [reanalyzingRepoId, setReanalyzingRepoId] = useState(null);
 
   const status = useSelector(selectDashboardStatus);
   const error = useSelector(selectDashboardError);
@@ -266,6 +273,10 @@ export default function DashboardPage() {
     });
 
     return filtered.toSorted((a, b) => {
+      if (a.isStarred !== b.isStarred) {
+        return a.isStarred ? -1 : 1;
+      }
+
       if (sortBy === 'oldest') {
         return getAnalysisTime(a) - getAnalysisTime(b);
       }
@@ -339,6 +350,46 @@ export default function DashboardPage() {
         analyzedAt: job.completedAt || job.createdAt,
       },
     };
+  };
+
+  const handleToggleStar = async (repoId, e) => {
+    e?.preventDefault();
+    setStarringRepoId(repoId);
+    try {
+      await dispatch(toggleRepositoryStar({ repositoryId: repoId })).unwrap();
+    } catch (error) {
+      console.error('Failed to toggle star:', error);
+    } finally {
+      setStarringRepoId(null);
+    }
+  };
+
+  const handleReanalyze = (repo, e) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    setReanalyzingRepoId(repo.id);
+
+    const config =
+      repo.source === 'local'
+        ? {
+            source: 'local',
+            localPath: repo.fullName,
+          }
+        : {
+            source: 'github',
+            github: {
+              mode:
+                repo.githubMode ||
+                (repo.sourceCategory === 'github-public' ? 'public' : 'owned'),
+              owner: repo.owner,
+              repo: repo.name,
+              branch: repo.branch || 'main',
+            },
+          };
+
+    dispatch(analyzeCodebase(config));
+    navigate('/graph');
+    setReanalyzingRepoId(null);
   };
 
   return (
@@ -619,6 +670,36 @@ export default function DashboardPage() {
                           type="button"
                           size="sm"
                           variant="ghost"
+                          onClick={(e) => handleToggleStar(repo.id, e)}
+                          disabled={starringRepoId === repo.id}
+                          className="gap-1.5"
+                          title={repo.isStarred ? 'Remove from favorites' : 'Add to favorites'}
+                        >
+                          <Star
+                            className={`size-3.5 ${
+                              repo.isStarred
+                                ? 'fill-gold text-gold'
+                                : 'text-muted-foreground'
+                            } transition-all`}
+                          />
+                        </Button>
+
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={(e) => handleReanalyze(repo, e)}
+                          disabled={reanalyzingRepoId === repo.id}
+                          className="gap-1.5"
+                        >
+                          <RotateCcw className={`size-3.5 ${reanalyzingRepoId === repo.id ? 'animate-spin' : ''}`} />
+                          Re-analyze
+                        </Button>
+
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
                           onClick={() => toggleJobs(repo.id)}
                           className="gap-1.5"
                         >
@@ -631,11 +712,7 @@ export default function DashboardPage() {
                           <Button size="sm" variant="outline" asChild>
                             <Link to={graphLink.to} state={graphLink.state}>Open graph</Link>
                           </Button>
-                        ) : (
-                          <Button type="button" size="sm" variant="outline" disabled>
-                            Graph unavailable
-                          </Button>
-                        )}
+                        ) : null}
                       </div>
 
                       {expandedRepos[repo.id] ? (

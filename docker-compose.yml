@@ -37,6 +37,7 @@ services:
       - /app/node_modules
     command: sh -c "
       until pg_isready -h postgres -p 5432; do sleep 1; done;
+      if [ ! -d node_modules ]; then npm install; fi;
       npm run migrate;
       npm run dev
       "

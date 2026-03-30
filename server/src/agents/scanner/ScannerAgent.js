@@ -16,7 +16,14 @@ const DEFAULT_SKIP_DIRS = new Set([
   '.vercel',
 ]);
 
-const ALLOWED_EXTENSIONS = new Set(['.js', '.ts', '.jsx', '.tsx']);
+const ALLOWED_EXTENSIONS = new Set([
+  '.js',
+  '.ts',
+  '.jsx',
+  '.tsx',
+  '.py',
+  '.go',
+]);
 
 function normalizeRelative(filePath, rootDir) {
   return path.relative(rootDir, filePath).replace(/\\/g, '/');

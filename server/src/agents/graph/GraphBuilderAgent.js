@@ -3,7 +3,7 @@ import { existsSync } from 'fs';
 import { BaseAgent } from '../core/BaseAgent.js';
 import { scoreGraphBuilder } from '../core/confidence.js';
 
-const RESOLVE_EXTS = ['.js', '.ts', '.jsx', '.tsx'];
+const RESOLVE_EXTS = ['.js', '.ts', '.jsx', '.tsx', '.py', '.go'];
 
 function inferFileType(relPath) {
   const normalized = relPath.replace(/\\/g, '/').toLowerCase();
@@ -118,6 +118,7 @@ export class GraphBuilderAgent extends BaseAgent {
     }
 
     const graph = {};
+    const functionNodes = {};
     const adjacency = new Map();
     const reverse = new Map();
     const edges = [];
@@ -171,6 +172,8 @@ export class GraphBuilderAgent extends BaseAgent {
         },
       };
 
+      functionNodes[source] = Array.isArray(parsed.functionNodes) ? parsed.functionNodes : [];
+
       adjacency.set(source, deps);
       if (!reverse.has(source)) reverse.set(source, []);
 
@@ -219,7 +222,7 @@ export class GraphBuilderAgent extends BaseAgent {
       jobId: context?.jobId,
       status: 'success',
       confidence,
-      data: { graph, edges, topology },
+      data: { graph, edges, topology, functionNodes },
       errors,
       warnings,
       metrics: {

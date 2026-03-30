@@ -6,12 +6,13 @@ import { Button } from '@/components/ui/button';
 import GraphToolbar from '../components/GraphToolbar';
 import GraphView from '../components/GraphView';
 import {
+  loadSharedGraph,
   loadSavedGraph,
   selectGraphData,
   selectGraphError,
   selectGraphStatus,
 } from '../slices/graphSlice';
-import { QueryBar } from '../../ai';
+import { QueryBar, QueryHistory } from '../../ai';
 
 function toFiniteNumber(value) {
   const numberValue = Number(value);
@@ -33,7 +34,27 @@ export default function GraphPage() {
     return stateJobId || queryJobId || null;
   }, [location.state, searchParams]);
 
+  const shareToken = useMemo(() => {
+    const token = String(searchParams.get('share') || '').trim();
+    return token || null;
+  }, [searchParams]);
+
   useEffect(() => {
+    if (!shareToken) return;
+
+    const isCurrentGraphShared = data?.rootDir === `shared:${shareToken}`;
+    if (isCurrentGraphShared) return;
+
+    if (data?.jobId && !String(data.jobId).startsWith('shared:')) {
+      // Avoid replacing an existing private graph without explicit confirmation.
+      if (!window.confirm('Load shared graph? This will replace your current view.')) return;
+    }
+
+    dispatch(loadSharedGraph({ token: shareToken }));
+  }, [data?.rootDir, dispatch, shareToken]);
+
+  useEffect(() => {
+    if (shareToken) return;
     if (!requestedJobId) return;
     if (data?.jobId === requestedJobId) return;
 
@@ -45,7 +66,7 @@ export default function GraphPage() {
         analyzedAt: location.state?.analyzedAt || null,
       }),
     );
-  }, [data?.jobId, dispatch, location.state, requestedJobId]);
+  }, [data?.jobId, dispatch, location.state, requestedJobId, shareToken]);
 
   if (!data && status === 'loading') {
     return (
@@ -91,6 +112,7 @@ export default function GraphPage() {
         <section className="mx-auto mt-6 h-[calc(100vh-10rem)] w-full max-w-375 px-4 pb-4">
           <div className="mb-3 rounded-xl border border-border bg-card/80 p-2 shadow-sm">
             <QueryBar jobId={data?.jobId} />
+            <QueryHistory jobId={data?.jobId} />
           </div>
           <div className="flex h-[calc(100%-4.5rem)] flex-col overflow-hidden rounded-xl border border-border/60 bg-card/40">
             <GraphToolbar />

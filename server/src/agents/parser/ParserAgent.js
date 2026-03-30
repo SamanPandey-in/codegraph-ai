@@ -15,6 +15,10 @@ function parseConcurrency() {
   return Math.max(1, os.cpus().length - 1);
 }
 
+function buildWorkerExecArgv() {
+  return [];
+}
+
 export class ParserAgent extends BaseAgent {
   agentId = 'parser-agent';
   maxRetries = 2;
@@ -103,10 +107,17 @@ export class ParserAgent extends BaseAgent {
   }
 
   _parseInWorker(filePath, relativePath) {
+    const ext = path.extname(filePath).toLowerCase();
+    const workerFile = ext === '.py'
+      ? './pythonWorker.js'
+      : ext === '.go'
+        ? './goWorker.js'
+        : './parseWorker.js';
+
     return new Promise((resolve) => {
-      const worker = new Worker(new URL('./parseWorker.js', import.meta.url), {
+      const worker = new Worker(new URL(workerFile, import.meta.url), {
         workerData: { filePath, relativePath },
-        execArgv: process.execArgv.filter((arg) => !String(arg).startsWith('--input-type')),
+        execArgv: buildWorkerExecArgv(),
       });
 
       worker.once('message', (result) => {

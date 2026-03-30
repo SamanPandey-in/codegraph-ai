@@ -6,6 +6,7 @@ import {
   buildRepositoriesListCacheKey,
   buildRepositoryJobsCacheKey,
   cacheTtl,
+  invalidateRepositoriesCacheForUser,
   readJsonCache,
   writeJsonCache,
 } from '../../../infrastructure/cache.js';
@@ -147,6 +148,7 @@ router.get('/', async (req, res, next) => {
               r.default_branch,
               r.last_scanned_at,
               r.scan_count,
+              r.is_starred,
               r.created_at,
               aj.id AS latest_job_id,
               aj.status AS latest_job_status,
@@ -167,7 +169,7 @@ router.get('/', async (req, res, next) => {
           )
           SELECT *
           FROM repos_with_latest
-          ORDER BY COALESCE(latest_analyzed_at, last_scanned_at, created_at) DESC
+          ORDER BY is_starred DESC, COALESCE(latest_analyzed_at, last_scanned_at, created_at) DESC
           LIMIT $2 OFFSET $3
         `,
         [userId, limit, offset],
@@ -203,6 +205,7 @@ router.get('/', async (req, res, next) => {
         defaultBranch: row.default_branch || null,
         lastScannedAt: row.last_scanned_at || null,
         scanCount: Number.isFinite(row.scan_count) ? row.scan_count : 0,
+        isStarred: row.is_starred || false,
         latestJob: row.latest_job_id
           ? {
               id: row.latest_job_id,
@@ -348,6 +351,63 @@ router.get('/:id/jobs', async (req, res, next) => {
 
     res.setHeader('X-Cache', 'MISS');
     return res.status(200).json(payload);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch('/:id/star', async (req, res, next) => {
+  try {
+    const authUser = getAuthUser(req);
+    if (!authUser?.id) {
+      return res.status(401).json({ error: 'Authentication required.' });
+    }
+
+    const repositoryId = String(req.params?.id || '').trim();
+    if (!isUuid(repositoryId)) {
+      return res.status(400).json({ error: 'Invalid repository id.' });
+    }
+
+    const userId = await resolveDatabaseUserId(authUser);
+    if (!userId) {
+      const err = new Error('Failed to resolve authenticated user record.');
+      err.statusCode = 500;
+      throw err;
+    }
+
+    // Verify repository ownership
+    const repoResult = await pgPool.query(
+      `
+        SELECT id, is_starred
+        FROM repositories
+        WHERE id = $1 AND owner_id = $2
+        LIMIT 1
+      `,
+      [repositoryId, userId],
+    );
+
+    if (repoResult.rowCount === 0) {
+      return res.status(404).json({ error: 'Repository not found.' });
+    }
+
+    // Toggle the is_starred flag
+    const currentStarred = repoResult.rows[0].is_starred || false;
+    const updateResult = await pgPool.query(
+      `
+    UPDATE repositories
+    SET is_starred = $1
+        WHERE id = $2 AND owner_id = $3
+        RETURNING id, is_starred
+      `,
+      [!currentStarred, repositoryId, userId],
+    );
+
+    await invalidateRepositoriesCacheForUser(redisClient, userId);
+
+    return res.status(200).json({
+      id: updateResult.rows[0].id,
+      isStarred: updateResult.rows[0].is_starred,
+    });
   } catch (error) {
     return next(error);
   }

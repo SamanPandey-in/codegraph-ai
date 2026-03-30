@@ -13,9 +13,9 @@ export default function QueryBar({ jobId }) {
   const inputRef = useRef(null);
 
   const { status, data, error } = queryState;
-  const isLoading = status === 'pending';
-  const hasResult = data && status === 'fulfilled';
-  const hasError = error && status === 'rejected';
+  const isLoading = status === 'loading';
+  const hasResult = data && status === 'succeeded';
+  const hasError = error && status === 'failed';
   const highlightCount = data?.highlightedFiles?.length || 0;
 
   // Auto-focus input when expanded

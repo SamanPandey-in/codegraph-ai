@@ -3,6 +3,7 @@ export { default as DashboardPage } from './pages/DashboardPage';
 export {
 	fetchAnalyzedRepositories,
 	fetchRepositoryJobs,
+	toggleRepositoryStar,
 	selectDashboardStatus,
 	selectDashboardError,
 	selectAnalyzedRepositories,

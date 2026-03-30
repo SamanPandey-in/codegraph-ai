@@ -88,6 +88,38 @@ export const graphService = {
     return data;
   },
 
+  getSharedGraph: async (token) => {
+    if (!token) {
+      throw new Error('A share token is required to load a shared graph.');
+    }
+
+    const { data } = await graphClient.get(`/api/share/${encodeURIComponent(token)}`);
+    return data;
+  },
+
+  getFunctionNodes: async (jobId, filePath) => {
+    if (!jobId) throw new Error('jobId is required to fetch function nodes.');
+    if (!filePath) throw new Error('filePath is required to fetch function nodes.');
+
+    const encodedFilePath = encodeURIComponent(filePath);
+    const { data } = await graphClient.get(`/api/graph/${jobId}/functions/${encodedFilePath}`);
+    return Array.isArray(data) ? data : [];
+  },
+
+  shareGraph: async (jobId, options = {}) => {
+    if (!jobId) {
+      throw new Error('A jobId is required to create a share link.');
+    }
+
+    const payload = {};
+
+    if (options.visibility) payload.visibility = options.visibility;
+    if (options.expiresAt) payload.expiresAt = options.expiresAt;
+
+    const { data } = await graphClient.post(`/api/graph/${jobId}/share`, payload);
+    return data;
+  },
+
   validateLocalPath: async (projectPath) => {
     const { data } = await graphClient.post('/api/analyze/local/validate', {
       path: projectPath.trim(),
