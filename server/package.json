@@ -10,7 +10,9 @@
     "start": "node index.js",
     "dev": "nodemon index.js",
     "migrate": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/001_initial.sql || true; psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/002_function_nodes.sql || true",
-    "db:migrate": "npm run migrate"
+    "db:migrate": "npm run migrate",
+    "test": "node --test \"test/**/*.test.js\"",
+    "test:ai-queries": "node --test test/ai.queries.test.js"
   },
   "dependencies": {
     "@babel/parser": "^7.23.6",

@@ -57,6 +57,23 @@ export const aiService = {
     });
   },
 
+  async getQueryHistory({ jobId, page = 1, limit = 20 } = {}) {
+    const params = {
+      page: Math.max(1, Number.parseInt(page, 10) || 1),
+      limit: Math.min(50, Math.max(1, Number.parseInt(limit, 10) || 20)),
+    };
+
+    const normalizedJobId = normalizeText(jobId);
+    if (normalizedJobId) params.jobId = normalizedJobId;
+
+    const { data } = await aiClient.get('/api/ai/queries', { params });
+    return {
+      queries: Array.isArray(data?.queries) ? data.queries : [],
+      page: Number.isFinite(data?.page) ? data.page : params.page,
+      limit: Number.isFinite(data?.limit) ? data.limit : params.limit,
+    };
+  },
+
   async explainNode({ jobId, filePath, nodeLabel, question }) {
     const normalizedJobId = normalizeText(jobId);
     if (!normalizedJobId) {

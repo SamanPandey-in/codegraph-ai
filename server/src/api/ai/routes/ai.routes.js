@@ -120,6 +120,75 @@ function toGraphFromRows(nodeRows = [], edgeRows = []) {
 
 router.use(aiLimiter);
 
+router.get('/queries', async (req, res, next) => {
+  const authUser = getAuthUser(req);
+  if (!authUser?.id) {
+    return res.status(401).json({ error: 'Authentication required.' });
+  }
+
+  const jobId = String(req.query?.jobId || '').trim();
+  const page = Math.max(1, Number.parseInt(req.query?.page, 10) || 1);
+  const limit = Math.min(50, Math.max(1, Number.parseInt(req.query?.limit, 10) || 20));
+  const offset = (page - 1) * limit;
+
+  try {
+    const userId = await resolveDatabaseUserId(authUser);
+    if (!userId) {
+      return res.status(500).json({ error: 'Failed to resolve authenticated user.' });
+    }
+
+    if (jobId) {
+      const ownership = await pgPool.query(
+        `
+          SELECT 1
+          FROM analysis_jobs
+          WHERE id = $1 AND user_id = $2
+          LIMIT 1
+        `,
+        [jobId, userId],
+      );
+
+      if (ownership.rowCount === 0) {
+        return res.status(404).json({ error: 'Analysis job not found for this user.' });
+      }
+    }
+
+    const queryText = jobId
+      ? `
+          SELECT id, question, answer, highlights, confidence, created_at
+          FROM saved_queries
+          WHERE user_id = $1 AND job_id = $2
+          ORDER BY created_at DESC
+          LIMIT $3 OFFSET $4
+        `
+      : `
+          SELECT id, question, answer, highlights, confidence, created_at
+          FROM saved_queries
+          WHERE user_id = $1
+          ORDER BY created_at DESC
+          LIMIT $2 OFFSET $3
+        `;
+
+    const params = jobId ? [userId, jobId, limit, offset] : [userId, limit, offset];
+    const result = await pgPool.query(queryText, params);
+
+    return res.status(200).json({
+      queries: result.rows.map((row) => ({
+        id: row.id,
+        question: row.question,
+        answer: row.answer,
+        highlights: Array.isArray(row.highlights) ? row.highlights : [],
+        confidence: row.confidence || null,
+        createdAt: row.created_at,
+      })),
+      page,
+      limit,
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.post('/query', async (req, res, next) => {
   const authUser = getAuthUser(req);
   if (!authUser?.id) {

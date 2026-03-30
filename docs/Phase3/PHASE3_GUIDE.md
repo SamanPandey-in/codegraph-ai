@@ -1042,8 +1042,8 @@ const aiLimiter = rateLimit({
 |---|---|---|
 | Week 1 | Section 1 (Phase 2 gaps) | AI panel fully works on node click - Done |
 | Week 1 | Section 3 (streaming explanations) | Streaming text in AiPanel - Done |
-| Week 2 | Section 2 (function-level graph) | Double-click to expand file nodes |
-| Week 2 | Section 5 (saved queries UI) | Query history visible in graph view |
+| Week 2 | Section 2 (function-level graph) | Double-click to expand file nodes - Done |
+| Week 2 | Section 5 (saved queries UI) | Query history visible in graph view - Done|
 | Week 3 | Section 4 (multi-language) | Python/Go repos parse correctly |
 | Week 3 | Section 6 (dashboard improvements) | Re-analyze + starred repos |
 | Week 4 | Section 7 (shareable links) | Share button in toolbar |
