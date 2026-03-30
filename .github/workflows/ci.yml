@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: ankane/pgvector
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: codegraph_test
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: cd server; npm ci
+      - run: cd server; DATABASE_URL=postgres://postgres:postgres@localhost:5432/codegraph_test npm run migrate
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/codegraph_test
+      - run: cd server; npm run test:coverage
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/codegraph_test
+          REDIS_URL: redis://localhost:6379
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          JWT_SECRET: test_secret
+
+  client:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: cd client; npm ci
+      - run: cd client; npm run build
