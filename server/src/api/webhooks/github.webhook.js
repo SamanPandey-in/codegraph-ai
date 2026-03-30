@@ -154,11 +154,11 @@ router.post('/github', async (req, res, next) => {
 
     const jobResult = await pgPool.query(
       `
-        INSERT INTO analysis_jobs (repository_id, user_id, branch, status)
-        VALUES ($1, $2, $3, 'queued')
+        INSERT INTO analysis_jobs (repository_id, user_id, branch, status, metadata)
+        VALUES ($1, $2, $3, 'queued', $4)
         RETURNING id
       `,
-      [repositoryId, userId, branch],
+      [repositoryId, userId, branch, JSON.stringify({ prNumber, prTitle })],
     );
 
     const jobId = jobResult.rows[0].id;
