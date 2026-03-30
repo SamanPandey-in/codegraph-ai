@@ -3,7 +3,7 @@ import { existsSync } from 'fs';
 import { BaseAgent } from '../core/BaseAgent.js';
 import { scoreGraphBuilder } from '../core/confidence.js';
 
-const RESOLVE_EXTS = ['.js', '.ts', '.jsx', '.tsx'];
+const RESOLVE_EXTS = ['.js', '.ts', '.jsx', '.tsx', '.py', '.go'];
 
 function inferFileType(relPath) {
   const normalized = relPath.replace(/\\/g, '/').toLowerCase();
