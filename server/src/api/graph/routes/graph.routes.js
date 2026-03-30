@@ -48,9 +48,9 @@ function getAuthUser(req) {
   }
 }
 
-router.get('/:jobId/functions/*', functionNodesLimiter, async (req, res, next) => {
+router.get('/:jobId/functions/*filePath', functionNodesLimiter, async (req, res, next) => {
   const { jobId } = req.params;
-  const wildcardPath = req.params[0];
+  const wildcardPath = req.params.filePath;
   const rawFilePath = String(wildcardPath || '').trim();
 
   if (!jobId) {
