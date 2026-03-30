@@ -8,6 +8,8 @@ import { PersistenceAgent } from '../persistence/PersistenceAgent.js';
 import { AuditLogger } from './AuditLogger.js';
 import { JobStatusEmitter } from './JobStatusEmitter.js';
 import { decideConfidence, computeOverallConfidence } from './confidence.js';
+import GitHubPRService from '../../services/GitHubPRService.js';
+import ImpactAnalysisService from '../../services/ImpactAnalysisService.js';
 import {
   buildGraphCacheKey,
   deleteCacheKey,
@@ -131,6 +133,8 @@ export class SupervisorAgent {
         nodeCount: Object.keys(pipelineData.graph || {}).length,
         edgeCount: pipelineData.edges?.length || 0,
       });
+
+      await this._tryPostPRComment(jobId, input);
 
       await this.agents.ingestion.cleanup(pipelineData.tempRoot);
 
@@ -313,6 +317,51 @@ export class SupervisorAgent {
       }
     } catch (error) {
       console.error('[SupervisorAgent] Failed to invalidate Redis caches:', error.message);
+    }
+  }
+
+  async _tryPostPRComment(jobId, input) {
+    try {
+      const prNumber = input?.github?.prNumber;
+      const owner = input?.github?.owner;
+      const repo = input?.github?.repo;
+
+      if (!prNumber || !owner || !repo) return;
+      if (!GitHubPRService.isConfigured()) {
+        console.log('[SupervisorAgent] GitHub token not configured, skipping PR comment.');
+        return;
+      }
+
+      let diff;
+      try {
+        diff = await GitHubPRService.getPRDiff(owner, repo, parseInt(prNumber, 10));
+      } catch (err) {
+        console.warn('[SupervisorAgent] Could not fetch PR diff:', err.message);
+        return;
+      }
+
+      const changedFiles = GitHubPRService.parseDiff(diff).map((f) => f.file);
+      if (changedFiles.length === 0) return;
+
+      const { impactedFiles } = await ImpactAnalysisService.findImpactedFiles(jobId, changedFiles, 3);
+      const graphUrl = `${process.env.CLIENT_URL || 'http://localhost:5173'}/graph?jobId=${jobId}`;
+      const comment = GitHubPRService.formatImpactComment(
+        changedFiles,
+        Array.from(impactedFiles).sort(),
+        graphUrl,
+      );
+
+      const existing = await GitHubPRService.findExistingComment(owner, repo, parseInt(prNumber, 10));
+      if (existing) {
+        await GitHubPRService.updatePRComment(owner, repo, existing.id, comment);
+      } else {
+        await GitHubPRService.postPRComment(owner, repo, parseInt(prNumber, 10), comment);
+      }
+
+      console.log(`[SupervisorAgent] PR comment posted to ${owner}/${repo}#${prNumber}`);
+    } catch (err) {
+      // PR comment failure must never abort the main pipeline.
+      console.error('[SupervisorAgent] Failed to post PR comment:', err.message);
     }
   }
 
