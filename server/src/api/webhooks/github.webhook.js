@@ -162,11 +162,7 @@ router.post('/github', async (req, res, next) => {
     );
 
     const jobId = jobResult.rows[0].id;
-
-    // Store PR metadata for comment posting after analysis
-    const prNumber = payload?.pull_request?.number;
-    const prTitle = payload?.pull_request?.title;
-
+    
     await enqueueAnalysisJob({
       jobId,
       input: {
