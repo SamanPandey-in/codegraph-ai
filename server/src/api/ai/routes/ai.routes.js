@@ -5,7 +5,6 @@ import OpenAI from 'openai';
 import { QueryAgent } from '../../../agents/query/QueryAgent.js';
 import { AnalysisAgent } from '../../../agents/analysis/AnalysisAgent.js';
 import { pgPool, redisClient } from '../../../infrastructure/connections.js';
-import { requirePlan } from '../../../middleware/planGuard.middleware.js';
 
 const router = Router();
 const openaiClient = process.env.OPENAI_API_KEY
@@ -206,7 +205,7 @@ router.get('/queries', async (req, res, next) => {
   }
 });
 
-router.post('/query', requirePlan('pro', 'team'), async (req, res, next) => {
+router.post('/query', async (req, res, next) => {
   const authUser = getAuthUser(req);
   if (!authUser?.id) {
     return res.status(401).json({ error: 'Authentication required.' });

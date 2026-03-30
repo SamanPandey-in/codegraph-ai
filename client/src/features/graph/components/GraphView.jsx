@@ -208,6 +208,29 @@ export default function GraphView() {
       try {
         const functionDeclarations = await graphService.getFunctionNodes(jobId, node.id);
 
+        if (functionDeclarations.length === 0) {
+          // Visual feedback for files with no extractable function declarations.
+          setNodes((prev) =>
+            prev.map((n) =>
+              n.id === node.id
+                ? { ...n, style: { ...n.style, boxShadow: '0 0 0 2px #888, 0 0 8px #88888844' } }
+                : n,
+            ),
+          );
+
+          setTimeout(() => {
+            setNodes((prev) =>
+              prev.map((n) =>
+                n.id === node.id
+                  ? { ...n, style: { ...n.style, boxShadow: undefined } }
+                  : n,
+              ),
+            );
+          }, 800);
+
+          return;
+        }
+
         const baseStyle = FUNCTION_NODE_STYLE[themeMode] || FUNCTION_NODE_STYLE.dark;
         const createdNodes = [];
         const createdEdges = [];
@@ -267,8 +290,8 @@ export default function GraphView() {
         }
 
         expandedNodesRef.current.add(node.id);
-      } catch (error) {
-        console.error('Failed to load function nodes:', error);
+      } catch (err) {
+        console.warn('[GraphView] Failed to load function nodes:', err.message);
       }
     },
     [graph, jobId, setEdges, setNodes, themeMode],

@@ -26,11 +26,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - run: cd server; npm ci
-      - run: cd server; DATABASE_URL=postgres://postgres:postgres@localhost:5432/codegraph_test npm run migrate
+      - name: Install server dependencies
+        run: npm ci
+        working-directory: server
+      - name: Run migrations
+        run: npm run migrate
+        working-directory: server
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/codegraph_test
-      - run: cd server; npm run test:coverage
+      - name: Run tests
+        run: npm run test:coverage
+        working-directory: server
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/codegraph_test
           REDIS_URL: redis://localhost:6379
@@ -44,5 +50,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - run: cd client; npm ci
-      - run: cd client; npm run build
+      - name: Install client dependencies
+        run: npm ci
+        working-directory: client
+      - name: Build client
+        run: npm run build
+        working-directory: client

@@ -1,67 +1,37 @@
 import { pgPool } from '../infrastructure/connections.js';
 
-/**
- * Impact Analysis Service
- * Analyzes code graph to determine which files are impacted by changes
- */
-
 class ImpactAnalysisService {
-  /**
-   * Find all files impacted by changed files
-   * Traverses the dependency graph to find files that depend on changed files
-   *
-   * @param {string} jobId - Analysis job ID
-   * @param {Array<string>} changedFiles - Array of file paths that changed
-   * @param {number} maxDepth - Maximum dependency depth to traverse (default: 3)
-   * @returns {Promise<{impactedFiles: Set<string>, depth: number}>}
-   */
   async findImpactedFiles(jobId, changedFiles, maxDepth = 3) {
     if (!jobId || changedFiles.length === 0) {
       return { impactedFiles: new Set(), depth: 0 };
     }
 
-    const impactedFiles = new Set();
-    const visited = new Set(changedFiles);
-    let currentLevel = changedFiles;
-    let depth = 0;
-
     try {
-      // Fetch the entire graph for this job
-      const graphResult = await pgPool.query(
+      // Build reverse adjacency: target_path -> [source files that import it]
+      const edgeResult = await pgPool.query(
         `
-          SELECT relativePath, dependencies
-          FROM graph_nodes
-          WHERE jobId = $1
+          SELECT source_path, target_path
+          FROM graph_edges
+          WHERE job_id = $1
         `,
         [jobId],
       );
 
-      if (graphResult.rowCount === 0) {
-        return { impactedFiles: new Set(), depth: 0 };
+      const reverseMap = new Map();
+      for (const row of edgeResult.rows) {
+        if (!reverseMap.has(row.target_path)) reverseMap.set(row.target_path, []);
+        reverseMap.get(row.target_path).push(row.source_path);
       }
 
-      // Build an adjacency map: file -> files that depend on it
-      const dependencyMap = new Map();
-      const allNodes = graphResult.rows;
+      const impactedFiles = new Set();
+      const visited = new Set(changedFiles);
+      let currentLevel = changedFiles;
+      let depth = 0;
 
-      for (const node of allNodes) {
-        const deps = node.dependencies || [];
-        for (const dep of deps) {
-          if (!dependencyMap.has(dep)) {
-            dependencyMap.set(dep, []);
-          }
-          dependencyMap.get(dep).push(node.relativePath);
-        }
-      }
-
-      // BFS traversal: find all files that depend on changed files
       while (currentLevel.length > 0 && depth < maxDepth) {
         const nextLevel = [];
-
         for (const file of currentLevel) {
-          const dependents = dependencyMap.get(file) || [];
-
-          for (const dependent of dependents) {
+          for (const dependent of reverseMap.get(file) || []) {
             if (!visited.has(dependent)) {
               visited.add(dependent);
               impactedFiles.add(dependent);
@@ -69,25 +39,17 @@ class ImpactAnalysisService {
             }
           }
         }
-
         currentLevel = nextLevel;
         depth++;
       }
 
       return { impactedFiles, depth };
     } catch (err) {
-      console.error('Failed to find impacted files:', err);
+      console.error('[ImpactAnalysisService] findImpactedFiles failed:', err.message);
       return { impactedFiles: new Set(), depth: 0 };
     }
   }
 
-  /**
-   * Analyze which files are safe to change (no dependents)
-   *
-   * @param {string} jobId - Analysis job ID
-   * @param {Array<string>} changedFiles - Array of file paths that changed
-   * @returns {Promise<{safeFiles: Array<string>, riskyFiles: Array<string>}>}
-   */
   async analyzeChangeRisk(jobId, changedFiles) {
     if (!jobId || changedFiles.length === 0) {
       return { safeFiles: [], riskyFiles: [] };
@@ -96,66 +58,31 @@ class ImpactAnalysisService {
     try {
       const result = await pgPool.query(
         `
-          SELECT relativePath, 
-                 (SELECT COUNT(*) FROM graph_nodes gn2 WHERE $1::text[] && gn2.dependencies AND gn2.jobId = $2) as dependentCount
-          FROM graph_nodes
-          WHERE jobId = $2 AND relativePath = ANY($1)
+          SELECT gn.file_path,
+                 COUNT(ge.source_path) AS dependent_count
+          FROM graph_nodes gn
+          LEFT JOIN graph_edges ge ON ge.target_path = gn.file_path AND ge.job_id = gn.job_id
+          WHERE gn.job_id = $1 AND gn.file_path = ANY($2::text[])
+          GROUP BY gn.file_path
         `,
-        [changedFiles, jobId],
+        [jobId, changedFiles],
       );
 
       const safeFiles = [];
       const riskyFiles = [];
 
       for (const row of result.rows) {
-        if (row.dependentCount === 0) {
-          safeFiles.push(row.relativePath);
+        if (parseInt(row.dependent_count, 10) === 0) {
+          safeFiles.push(row.file_path);
         } else {
-          riskyFiles.push(row.relativePath);
+          riskyFiles.push(row.file_path);
         }
       }
 
       return { safeFiles, riskyFiles };
     } catch (err) {
-      console.error('Failed to analyze change risk:', err);
+      console.error('[ImpactAnalysisService] analyzeChangeRisk failed:', err.message);
       return { safeFiles: [], riskyFiles: [] };
-    }
-  }
-
-  /**
-   * Get circular dependencies for changed files
-   * Useful for identifying refactoring risks
-   *
-   * @param {string} jobId - Analysis job ID
-   * @param {Array<string>} changedFiles - Array of file paths that changed
-   * @returns {Promise<Array<Array<string>>>} Array of circular dependency paths
-   */
-  async findCircularDependencies(jobId, changedFiles) {
-    if (!jobId || changedFiles.length === 0) {
-      return [];
-    }
-
-    try {
-      const result = await pgPool.query(
-        `
-          SELECT cirularDeps
-          FROM graph_nodes
-          WHERE jobId = $1 AND relativePath = ANY($2) AND cirularDeps IS NOT NULL
-        `,
-        [jobId, changedFiles],
-      );
-
-      const cycles = [];
-      for (const row of result.rows) {
-        if (Array.isArray(row.circularDeps)) {
-          cycles.push(...row.circularDeps);
-        }
-      }
-
-      return cycles;
-    } catch (err) {
-      console.error('Failed to find circular dependencies:', err);
-      return [];
     }
   }
 }

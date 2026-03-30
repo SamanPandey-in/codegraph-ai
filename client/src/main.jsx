@@ -16,9 +16,19 @@ if (import.meta.env.VITE_SENTRY_DSN) {
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    
-    <Provider store={store}>
-      <App />
-    </Provider>
+    <Sentry.ErrorBoundary
+      fallback={({ error }) => (
+        <div style={{ padding: '2rem', fontFamily: 'monospace', color: '#dc2626' }}>
+          <h2>Something went wrong</h2>
+          <p style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+            {error?.message || 'Unknown error'}
+          </p>
+        </div>
+      )}
+    >
+      <Provider store={store}>
+        <App />
+      </Provider>
+    </Sentry.ErrorBoundary>
   </StrictMode>,
 );

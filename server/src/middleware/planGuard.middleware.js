@@ -5,9 +5,7 @@ const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const PLAN_LIMITS = {
-  free: { reposPerMonth: 3, aiQueriesPerDay: 10 },
-  pro: { reposPerMonth: Number.POSITIVE_INFINITY, aiQueriesPerDay: 200 },
-  team: { reposPerMonth: Number.POSITIVE_INFINITY, aiQueriesPerDay: 1000 },
+  free: { reposPerMonth: Number.POSITIVE_INFINITY, aiQueriesPerDay: Number.POSITIVE_INFINITY },
 };
 
 function isUuid(value) {
@@ -83,9 +81,7 @@ async function resolveDatabaseUserId(authUser) {
   return upserted.rows[0]?.id || null;
 }
 
-export function requirePlan(...allowedPlans) {
-  const required = new Set(allowedPlans.map((plan) => String(plan || '').trim().toLowerCase()));
-
+export function requirePlan(..._allowedPlans) {
   return async (req, res, next) => {
     try {
       const authUser = getAuthUser(req);
@@ -98,29 +94,8 @@ export function requirePlan(...allowedPlans) {
         return res.status(500).json({ error: 'Failed to resolve authenticated user.' });
       }
 
-      const result = await pgPool.query(
-        `
-          SELECT plan
-          FROM users
-          WHERE id = $1
-          LIMIT 1
-        `,
-        [userId],
-      );
-
-      const currentPlan = String(result.rows[0]?.plan || 'free').toLowerCase();
-
-      if (required.size > 0 && !required.has(currentPlan)) {
-        return res.status(403).json({
-          error: 'This feature requires a higher plan.',
-          currentPlan,
-          requiredPlans: [...required],
-          upgradeUrl: '/settings/billing',
-        });
-      }
-
-      req.userPlan = currentPlan;
-      req.planLimits = PLAN_LIMITS[currentPlan] || PLAN_LIMITS.free;
+      req.userPlan = 'free';
+      req.planLimits = PLAN_LIMITS.free;
       req.userId = userId;
 
       return next();

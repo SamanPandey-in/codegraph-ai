@@ -41,8 +41,12 @@ export default function GraphPage() {
 
   useEffect(() => {
     if (!shareToken) return;
+    if (data?.jobId && !String(data.jobId).startsWith('shared:')) {
+      // Avoid replacing an existing private graph without explicit confirmation.
+      if (!window.confirm('Load shared graph? This will replace your current view.')) return;
+    }
     dispatch(loadSharedGraph({ token: shareToken }));
-  }, [dispatch, shareToken]);
+  }, [data?.jobId, dispatch, shareToken]);
 
   useEffect(() => {
     if (shareToken) return;

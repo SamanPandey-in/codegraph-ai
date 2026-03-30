@@ -8,9 +8,7 @@ const router = Router();
 const SHARE_VISIBILITY = new Set(['unlisted', 'public']);
 
 function buildShareUrl(token) {
-  const baseUrl =
-    String(process.env.VITE_SHARE_BASE_URL || process.env.CLIENT_URL || '').trim() ||
-    'http://localhost:5173';
+  const baseUrl = String(process.env.CLIENT_URL || 'http://localhost:5173').trim();
 
   try {
     const url = new URL('/graph', baseUrl);
