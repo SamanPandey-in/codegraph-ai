@@ -5,6 +5,7 @@ import OpenAI from 'openai';
 import { QueryAgent } from '../../../agents/query/QueryAgent.js';
 import { AnalysisAgent } from '../../../agents/analysis/AnalysisAgent.js';
 import { pgPool, redisClient } from '../../../infrastructure/connections.js';
+import { requirePlan } from '../../../middleware/planGuard.middleware.js';
 
 const router = Router();
 const openaiClient = process.env.OPENAI_API_KEY
@@ -14,6 +15,22 @@ const openaiClient = process.env.OPENAI_API_KEY
 const aiLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: Number(process.env.AI_RATE_LIMIT_PER_MINUTE || 30),
+  keyGenerator: (req) => {
+    const token = req.cookies?.token || req.headers.authorization?.replace('Bearer ', '');
+
+    if (token && process.env.JWT_SECRET) {
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        if (decoded?.id) {
+          return `user:${decoded.id}`;
+        }
+      } catch {
+        // Fall back to IP key if JWT is not available or invalid.
+      }
+    }
+
+    return req.ip;
+  },
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many AI requests. Please wait a moment and try again.' },
@@ -189,7 +206,7 @@ router.get('/queries', async (req, res, next) => {
   }
 });
 
-router.post('/query', async (req, res, next) => {
+router.post('/query', requirePlan('pro', 'team'), async (req, res, next) => {
   const authUser = getAuthUser(req);
   if (!authUser?.id) {
     return res.status(401).json({ error: 'Authentication required.' });
