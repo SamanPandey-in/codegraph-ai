@@ -9,10 +9,10 @@ import {
   selectGraphError,
   selectGraphData,
 } from '../slices/graphSlice';
-import AnalyzeForm from '../components/AnalyzeForm';
+import UploadRepoForm from '../components/UploadRepoForm';
 import JobProgressBar from '../../jobs/components/JobProgressBar';
 
-export default function AnalyzePage() {
+export default function UploadRepoPage() {
   const status = useSelector(selectGraphStatus);
   const error = useSelector(selectGraphError);
   const data = useSelector(selectGraphData);
@@ -20,7 +20,7 @@ export default function AnalyzePage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <AnalyzeForm />
+      <UploadRepoForm />
       {data && status !== 'loading' && (
         <div className="mx-auto max-w-2xl px-4 py-6">
           <div className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-card/70 px-4 py-3">

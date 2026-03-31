@@ -105,7 +105,7 @@ function GitHubModeToggle({ value, onChange, disabled }) {
   );
 }
 
-export default function AnalyzeForm() {
+export default function UploadRepoForm() {
   const dispatch = useDispatch();
   const location = useLocation();
   const status = useSelector(selectGraphStatus);
@@ -529,7 +529,7 @@ export default function AnalyzeForm() {
         <Sparkles className="size-6 text-gold" />
       </div>
       <h1 className="mt-4 text-4xl font-bold tracking-tight text-center">
-        Analyze a Codebase
+        Upload Repo
       </h1>
       <p className="mt-3 max-w-md text-center text-muted-foreground">
         Choose a local or GitHub repository, select a branch when required, and
@@ -885,7 +885,7 @@ export default function AnalyzeForm() {
               Analyzing…
             </>
           ) : (
-            'Analyze Codebase'
+            'Analyze'
           )}
         </Button>
       </form>

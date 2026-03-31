@@ -1,0 +1,1 @@
+export { default as AnalyzePage } from './pages/AnalyzePage';

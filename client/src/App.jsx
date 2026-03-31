@@ -10,7 +10,8 @@ import Layout from '@/components/layout/Layout';
 
 import { LandingPage, LoginPage, SignupPage } from '@/features/auth';
 import { DashboardPage }                      from '@/features/dashboard';
-import { AnalyzePage, GraphPage }             from '@/features/graph';
+import { UploadRepoPage, GraphPage }             from '@/features/graph';
+import { AnalyzePage }             from '@/features/analyze';
 
 function RootRedirect() {
   const { isAuthenticated, loading } = useAuth();
@@ -39,6 +40,7 @@ function AppRoutes() {
       <Route element={<PrivateGuard />}>
         <Route element={<Layout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/upload-repo" element={<UploadRepoPage />} />
           <Route path="/analyze" element={<AnalyzePage />} />
           <Route path="/graph" element={<GraphPage />} />
         </Route>
