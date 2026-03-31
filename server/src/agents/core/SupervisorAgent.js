@@ -1,6 +1,6 @@
 import { IngestionAgent } from '../ingestion/IngestionAgent.js';
 import { ScannerAgent } from '../scanner/ScannerAgent.js';
-import { ParserAgent } from '../parser/ParserAgent.js';
+import { PolyglotParserAgent } from '../parser/PolyglotParserAgent.js';
 import { GraphBuilderAgent } from '../graph/GraphBuilderAgent.js';
 import { EnrichmentAgent } from '../enrichment/EnrichmentAgent.js';
 import { EmbeddingAgent } from '../embedding/EmbeddingAgent.js';
@@ -28,7 +28,7 @@ export class SupervisorAgent {
     this.agents = {
       ingestion: new IngestionAgent(),
       scanner: new ScannerAgent(),
-      parser: new ParserAgent(),
+      parser: new PolyglotParserAgent(),
       graphBuilder: new GraphBuilderAgent(),
       enrichment: new EnrichmentAgent(),
       embedding: new EmbeddingAgent(),

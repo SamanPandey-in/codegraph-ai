@@ -17,12 +17,16 @@ const DEFAULT_SKIP_DIRS = new Set([
 ]);
 
 const ALLOWED_EXTENSIONS = new Set([
-  '.js',
-  '.ts',
-  '.jsx',
-  '.tsx',
+  '.js', '.ts', '.jsx', '.tsx',
   '.py',
+  '.java',
   '.go',
+  '.rs',
+  '.rb',
+  '.cs',
+  '.kt', '.kts',
+  '.php',
+  '.sql',
 ]);
 
 function normalizeRelative(filePath, rootDir) {
