@@ -94,25 +94,25 @@ export default function QueryHistory({ jobId }) {
   if (!jobId) return null;
 
   return (
-    <div className="mt-2 rounded-lg border border-border/70 bg-background/40">
+    <div className="mt-2 rounded-xl shadow-neu-inset border-none bg-background/20 transition-all duration-500 overflow-hidden">
       <button
         type="button"
         onClick={() => setIsOpen((open) => !open)}
-        className="flex w-full items-center justify-between px-3 py-2 text-left"
+        className="flex w-full items-center justify-between px-4 py-3 text-left transition-all duration-300 hover:bg-background/40 active:scale-[0.99]"
       >
-        <span className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
+        <span className="flex items-center gap-2.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
           <History className="size-3.5" />
-          Recent queries
+          Recent Queries
         </span>
-        <span className="flex items-center gap-2">
-          {isLoading && <Loader2 className="size-3.5 animate-spin text-muted-foreground" />}
+        <span className="flex items-center gap-3">
+          {isLoading && <Loader2 className="size-3.5 animate-spin text-gold/60" />}
           {hasQueries && (
-            <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+            <span className="rounded-full shadow-neu-inset border-none bg-background/50 px-2.5 py-0.5 text-[9px] font-bold text-gold/80">
               {queries.length}
             </span>
           )}
           <ChevronDown
-            className={`size-3.5 text-muted-foreground transition-transform ${isOpen ? 'rotate-180' : ''}`}
+            className={`size-3.5 text-muted-foreground/40 transition-transform duration-500 ease-[var(--ease-out)] ${isOpen ? 'rotate-180' : ''}`}
           />
         </span>
       </button>
@@ -128,7 +128,7 @@ export default function QueryHistory({ jobId }) {
           )}
 
           {!error && visibleQueries.length > 0 && (
-            <ul className="flex flex-col gap-1">
+            <ul className="flex flex-col gap-1.5 animate-in fade-in slide-in-from-top-2 duration-500">
               {visibleQueries.map((queryItem) => (
                 <li key={queryItem.id}>
                   <button
@@ -137,10 +137,10 @@ export default function QueryHistory({ jobId }) {
                       if (!queryItem.question) return;
                       dispatch(queryGraph({ question: queryItem.question, jobId }));
                     }}
-                    className="group flex w-full items-start justify-between gap-3 rounded-md px-2 py-1.5 text-left hover:bg-muted/60"
+                    className="group flex w-full items-start justify-between gap-4 rounded-xl px-3 py-2.5 text-left transition-all duration-300 hover:bg-background shadow-neu-flat active:scale-[0.98]"
                   >
-                    <span className="line-clamp-2 text-xs text-foreground/90">{queryItem.question}</span>
-                    <span className="shrink-0 text-[10px] text-muted-foreground">
+                    <span className="line-clamp-2 text-xs font-medium text-foreground/80 group-hover:text-gold transition-colors">{queryItem.question}</span>
+                    <span className="shrink-0 text-[9px] font-bold uppercase tracking-tighter text-muted-foreground/30 mt-0.5">
                       {formatRelativeDate(queryItem.createdAt)}
                     </span>
                   </button>

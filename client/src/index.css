@@ -93,14 +93,59 @@
     pointer-events: none;
     background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
   }
+
+  /* Global Scrollbar Styling */
+  html {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(var(--foreground) / 0.1) transparent;
+  }
+
+  /* Webkit Browsers (Chrome, Safari, Edge) */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(var(--foreground) / 0.1);
+    border-radius: 10px;
+    transition: background 0.3s var(--ease-out);
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(var(--foreground) / 0.2);
+  }
+
+  .dark {
+    scrollbar-color: rgba(var(--foreground) / 0.15) transparent;
+  }
+
+  .dark ::-webkit-scrollbar-thumb {
+    background: rgba(var(--foreground) / 0.15);
+  }
+
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: rgba(var(--foreground) / 0.25);
+  }
 }
 
 @layer utilities {
   .shadow-neu-inset {
-    box-shadow: inset 4px 4px 8px rgba(0, 0, 0, 0.05), inset -4px -4px 8px rgba(255, 255, 255, 0.8);
+    box-shadow: inset 2px 2px 5px rgba(0, 0, 0, 0.05), inset -2px -2px 5px rgba(255, 255, 255, 0.7);
   }
   .dark .shadow-neu-inset {
-    box-shadow: inset 4px 4px 8px rgba(0, 0, 0, 0.4), inset -2px -2px 4px rgba(255, 255, 255, 0.05);
+    box-shadow: inset 2px 2px 5px rgba(0, 0, 0, 0.3), inset -1px -1px 3px rgba(255, 255, 255, 0.03);
+  }
+
+  .shadow-neu-flat {
+    box-shadow: 4px 4px 8px rgba(0, 0, 0, 0.05), -4px -4px 8px rgba(255, 255, 255, 0.8);
+  }
+  .dark .shadow-neu-flat {
+    box-shadow: 4px 4px 8px rgba(0, 0, 0, 0.3), -2px -2px 4px rgba(255, 255, 255, 0.02);
   }
   
   .glass-premium {
@@ -115,6 +160,18 @@
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
+  }
+
+  /* Design Engineering: Custom Easings */
+  :root {
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+    --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  /* Active Scale Utility */
+  .active-scale:active {
+    transform: scale(0.97);
   }
 }
 

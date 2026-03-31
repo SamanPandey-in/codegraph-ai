@@ -45,13 +45,13 @@ function toErrorMessage(err, fallback) {
 
 function SourceToggle({ value, onChange, disabled }) {
   return (
-    <div className="grid grid-cols-2 gap-2 rounded-lg border border-border bg-muted/30 p-1">
+    <div className="grid grid-cols-2 gap-2 rounded-xl shadow-neu-inset border-none bg-background/40 p-1.5 transition-all duration-300">
       <button
         type="button"
-        className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+        className={`rounded-lg px-4 py-2.5 text-sm font-bold tracking-tight transition-all duration-300 active:scale-[0.98] ${
           value === 'local'
-            ? 'bg-background shadow-sm text-foreground'
-            : 'text-muted-foreground hover:text-foreground'
+            ? 'bg-background shadow-neu-flat text-foreground'
+            : 'text-muted-foreground/60 hover:text-foreground hover:bg-background/20'
         }`}
         disabled={disabled}
         onClick={() => onChange('local')}
@@ -60,10 +60,10 @@ function SourceToggle({ value, onChange, disabled }) {
       </button>
       <button
         type="button"
-        className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+        className={`rounded-lg px-4 py-2.5 text-sm font-bold tracking-tight transition-all duration-300 active:scale-[0.98] ${
           value === 'github'
-            ? 'bg-background shadow-sm text-foreground'
-            : 'text-muted-foreground hover:text-foreground'
+            ? 'bg-background shadow-neu-flat text-foreground'
+            : 'text-muted-foreground/60 hover:text-foreground hover:bg-background/20'
         }`}
         disabled={disabled}
         onClick={() => onChange('github')}
@@ -76,13 +76,13 @@ function SourceToggle({ value, onChange, disabled }) {
 
 function GitHubModeToggle({ value, onChange, disabled }) {
   return (
-    <div className="grid grid-cols-2 gap-2 rounded-lg border border-border bg-muted/30 p-1">
+    <div className="grid grid-cols-2 gap-2 rounded-xl shadow-neu-inset border-none bg-background/40 p-1.5 transition-all duration-300">
       <button
         type="button"
-        className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+        className={`rounded-lg px-4 py-2.5 text-sm font-bold tracking-tight transition-all duration-300 active:scale-[0.98] ${
           value === 'public'
-            ? 'bg-background shadow-sm text-foreground'
-            : 'text-muted-foreground hover:text-foreground'
+            ? 'bg-background shadow-neu-flat text-foreground'
+            : 'text-muted-foreground/60 hover:text-foreground hover:bg-background/20'
         }`}
         disabled={disabled}
         onClick={() => onChange('public')}
@@ -91,10 +91,10 @@ function GitHubModeToggle({ value, onChange, disabled }) {
       </button>
       <button
         type="button"
-        className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+        className={`rounded-lg px-4 py-2.5 text-sm font-bold tracking-tight transition-all duration-300 active:scale-[0.98] ${
           value === 'owned'
-            ? 'bg-background shadow-sm text-foreground'
-            : 'text-muted-foreground hover:text-foreground'
+            ? 'bg-background shadow-neu-flat text-foreground'
+            : 'text-muted-foreground/60 hover:text-foreground hover:bg-background/20'
         }`}
         disabled={disabled}
         onClick={() => onChange('owned')}
@@ -525,8 +525,8 @@ export default function AnalyzeForm() {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-3.5rem)] px-4 py-16">
-      <div className="mb-2 flex size-14 items-center justify-center rounded-2xl border border-border bg-muted">
-        <Sparkles className="size-6 text-primary" />
+      <div className="mb-2 flex size-14 items-center justify-center rounded-2xl shadow-neu-inset border-none bg-background/50 animate-in zoom-in duration-700">
+        <Sparkles className="size-6 text-gold" />
       </div>
       <h1 className="mt-4 text-4xl font-bold tracking-tight text-center">
         Analyze a Codebase
@@ -547,8 +547,8 @@ export default function AnalyzeForm() {
         />
 
         {source === 'local' && (
-          <div className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4">
-            <Label htmlFor="project-path">Local repository path</Label>
+          <div className="flex flex-col gap-4 rounded-2xl shadow-neu-inset border-none bg-background/40 p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <Label htmlFor="project-path" className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground/70">Local repository path</Label>
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <FolderOpen className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
@@ -642,7 +642,7 @@ export default function AnalyzeForm() {
         )}
 
         {source === 'github' && (
-          <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
+          <div className="flex flex-col gap-4 rounded-2xl shadow-neu-inset border-none bg-background/40 p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <GitHubModeToggle
               value={githubMode}
               onChange={handleGitHubModeChange}
@@ -718,7 +718,7 @@ export default function AnalyzeForm() {
                     id="public-branch"
                     value={publicBranch}
                     onChange={(e) => setPublicBranch(e.target.value)}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex h-11 w-full rounded-xl shadow-neu-inset border-none bg-background/50 px-4 py-2 text-sm font-medium text-foreground transition-all duration-300 focus:ring-1 focus:ring-gold/50 disabled:cursor-not-allowed disabled:opacity-50 appearance-none"
                     disabled={
                       isLoading ||
                       publicLoading ||
@@ -791,20 +791,20 @@ export default function AnalyzeForm() {
                     )}
 
                     {!ownedReposLoading && filteredOwnedRepos.length > 0 && (
-                      <div className="grid gap-2 max-h-60 overflow-auto pr-1 rounded-md border border-border p-2">
+                      <div className="grid gap-2 max-h-60 overflow-auto pr-1 rounded-xl shadow-neu-inset border-none bg-background/20 p-3">
                         {filteredOwnedRepos.map((repo) => (
                           <button
                             key={repo.id}
                             type="button"
-                            className={`text-left rounded-md border px-3 py-2 transition-colors ${
+                            className={`text-left rounded-lg border-none px-4 py-3 transition-all duration-300 active:scale-[0.98] ${
                               selectedOwnedRepo?.id === repo.id
-                                ? 'border-primary bg-primary/10'
-                                : 'border-border hover:bg-muted/50'
+                                ? 'bg-background shadow-neu-flat text-foreground ring-1 ring-gold/40'
+                                : 'text-muted-foreground/60 hover:text-foreground hover:bg-background/40'
                             }`}
                             onClick={() => handleOwnedRepoSelect(repo)}
                           >
-                            <div className="font-medium text-sm">{repo.fullName}</div>
-                            <div className="text-xs text-muted-foreground mt-1">
+                            <div className="font-bold text-sm tracking-tight">{repo.fullName}</div>
+                            <div className="text-[10px] uppercase font-bold tracking-widest opacity-40 mt-1">
                               Default branch: {repo.defaultBranch}
                             </div>
                           </button>
@@ -821,9 +821,10 @@ export default function AnalyzeForm() {
                 )}
 
                 {selectedOwnedRepo && (
-                  <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs">
-                    <p className="font-medium text-foreground">
-                      Selected repository: {selectedOwnedRepo.fullName}
+                  <div className="rounded-xl shadow-neu-inset border-none bg-background/60 px-4 py-3 text-xs">
+                    <p className="font-bold uppercase tracking-widest text-[9px] opacity-40">Selected repository</p>
+                    <p className="font-bold text-foreground mt-0.5">
+                      {selectedOwnedRepo.fullName}
                     </p>
                   </div>
                 )}
@@ -836,13 +837,13 @@ export default function AnalyzeForm() {
                 )}
 
                 {selectedOwnedRepo && (
-                  <div className="flex flex-col gap-1.5 rounded-md border border-border bg-muted/20 p-3">
-                    <Label htmlFor="owned-branch-inline">Branch</Label>
+                  <div className="flex flex-col gap-2 rounded-xl shadow-neu-inset border-none bg-background/40 p-4">
+                    <Label htmlFor="owned-branch-inline" className="text-[9px] uppercase font-bold tracking-[0.2em] opacity-40">Select Branch</Label>
                     <select
                       id="owned-branch-inline"
                       value={ownedBranch}
                       onChange={(e) => setOwnedBranch(e.target.value)}
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                      className="flex h-11 w-full rounded-xl shadow-neu-inset border-none bg-background/50 px-4 py-2 text-sm font-bold text-foreground transition-all duration-300 focus:ring-1 focus:ring-gold/50 disabled:cursor-not-allowed disabled:opacity-50 appearance-none"
                       disabled={ownedBranchesLoading || ownedBranches.length === 0}
                     >
                       <option value="">

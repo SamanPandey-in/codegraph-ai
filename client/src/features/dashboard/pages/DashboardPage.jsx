@@ -132,7 +132,7 @@ function MetricCard({ icon, title, value, helper, index = 0 }) {
     >
       <CardHeader className="pb-3">
         <div className="flex items-center gap-3 text-xs uppercase tracking-widest font-bold text-muted-foreground/70">
-          <div className="flex size-9 items-center justify-center rounded-xl bg-background shadow-sm border border-border/20">
+          <div className="flex size-9 items-center justify-center rounded-xl bg-background/50 shadow-neu-inset border-none">
             {icon}
           </div>
           <span>{title}</span>
@@ -416,7 +416,7 @@ export default function DashboardPage() {
             >
               <CardHeader className="pb-4">
                 <div className="flex items-center gap-4">
-                  <div className="flex size-10 items-center justify-center rounded-xl bg-gold/10 shadow-sm border border-gold/20 group-hover:scale-110 transition-transform duration-300">
+                  <div className="flex size-10 items-center justify-center rounded-xl bg-gold/10 shadow-neu-inset border-none group-hover:scale-110 transition-transform duration-300">
                     {action.icon}
                   </div>
                   <CardTitle className="text-base font-display font-bold tracking-tight">{action.title}</CardTitle>
@@ -469,7 +469,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="mt-4">
-          <Card className="mb-4">
+          <Card className="mb-4 shadow-neu-inset border-none bg-background/40 rounded-2xl animate-in fade-in slide-in-from-bottom-2 duration-500 delay-300">
             <CardContent className="flex flex-col gap-3 py-4">
               <div className="grid gap-3 lg:grid-cols-3">
                 <div className="relative lg:col-span-1">
@@ -624,7 +624,7 @@ export default function DashboardPage() {
                             {repo.source} <span className="mx-1 opacity-30">|</span> {repo.branch || 'unknown'}
                           </p>
                         </div>
-                        <span className="rounded-xl border border-border/20 bg-background/50 px-3 py-1 text-[9px] font-black uppercase tracking-[0.15em] text-muted-foreground shadow-sm">
+                        <span className="rounded-xl border-none bg-background/50 px-3 py-1 text-[9px] font-black uppercase tracking-[0.15em] text-muted-foreground shadow-neu-inset">
                           {repo.status}
                         </span>
                       </div>
@@ -742,7 +742,7 @@ export default function DashboardPage() {
                                 return (
                                   <div
                                     key={job.id}
-                                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/20 bg-background/60 px-3 py-2"
+                                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl shadow-neu-inset border-none bg-background/60 px-4 py-3 transition-all duration-300 hover:bg-background/80"
                                   >
                                     <div className="flex min-w-0 flex-col gap-0.5 text-[11px] text-muted-foreground">
                                       <span className="font-semibold text-foreground/80">

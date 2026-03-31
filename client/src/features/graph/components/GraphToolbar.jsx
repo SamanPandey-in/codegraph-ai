@@ -142,26 +142,32 @@ export default function GraphToolbar({ graphContainerId = 'graph-container' }) {
   };
 
   return (
-    <header className="flex items-center justify-between gap-4 px-4 py-2.5 border-b border-border bg-background/80 backdrop-blur-sm shrink-0">
+    <header className="flex items-center justify-between gap-4 px-6 py-3 shadow-neu-inset border-none bg-background/60 backdrop-blur-md shrink-0 transition-all duration-500">
       <div className="flex items-center gap-3 min-w-0">
-        <div className="flex items-center gap-1.5 shrink-0">
-          <Code2 className="size-4 text-primary" />
-          <span className="font-bold text-sm">
-            CodeGraph<span className="text-primary">AI</span>
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="flex size-8 items-center justify-center rounded-xl shadow-neu-inset border-none bg-background/50 text-gold scale-110">
+            <Code2 className="size-4" />
+          </div>
+          <span className="font-display font-black text-sm tracking-tight">
+            CodeGraph<span className="text-gold">AI</span>
           </span>
         </div>
 
-        <span className="text-muted-foreground hidden sm:inline">·</span>
-
-        <div className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground min-w-0">
-          <FolderOpen className="size-3.5 shrink-0" />
-          <span className="font-mono truncate max-w-xs">{rootDir}</span>
+        <span className="text-muted-foreground/20 hidden sm:inline">|</span>
+        
+        <div className="hidden sm:flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 min-w-0">
+          <div className="flex size-6 items-center justify-center rounded-lg shadow-neu-inset bg-background/40">
+            <FolderOpen className="size-3" />
+          </div>
+          <span className="truncate max-w-[200px] hover:text-foreground transition-colors cursor-default">{rootDir}</span>
         </div>
 
-        <div className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
-          <FileCode2 className="size-3.5" />
+        <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 shrink-0">
+          <div className="flex size-6 items-center justify-center rounded-lg shadow-neu-inset bg-background/40">
+            <FileCode2 className="size-3" />
+          </div>
           <span>
-            {fileCount} file{fileCount !== 1 ? 's' : ''}
+            {fileCount} <span className="opacity-40">Files</span>
           </span>
         </div>
       </div>
@@ -177,12 +183,12 @@ export default function GraphToolbar({ graphContainerId = 'graph-container' }) {
           </span>
         )}
         <Button
-          variant={heatmapMode ? 'default' : 'outline'}
+          variant={heatmapMode ? 'neumo' : 'outline'}
           size="sm"
           onClick={handleHeatmapToggle}
           disabled={!jobId || isHeatmapLoading}
           title={heatmapMode ? 'Disable complexity heatmap' : 'Enable complexity heatmap'}
-          className="gap-1.5"
+          className={`gap-2 h-9 px-4 rounded-xl transition-all duration-500 ${heatmapMode ? 'bg-gold/10 text-gold shadow-neu-flat' : ''}`}
         >
           {isHeatmapLoading ? (
             <Loader2 className="size-3.5 animate-spin" />
@@ -197,7 +203,7 @@ export default function GraphToolbar({ graphContainerId = 'graph-container' }) {
           onClick={handleShare}
           disabled={!jobId || isSharing}
           title="Create share link"
-          className="gap-1.5"
+          className="gap-2 h-9 px-4 rounded-xl"
         >
           {isSharing ? <Loader2 className="size-3.5 animate-spin" /> : <Share2 className="size-3.5" />}
           Share
@@ -207,7 +213,7 @@ export default function GraphToolbar({ graphContainerId = 'graph-container' }) {
           size="sm"
           onClick={handleFullscreen}
           title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-          className="gap-1.5"
+          className="gap-2 h-9 px-4 rounded-xl"
         >
           {isFullscreen ? (
             <Minimize2 className="size-3.5" />
@@ -217,16 +223,16 @@ export default function GraphToolbar({ graphContainerId = 'graph-container' }) {
           {isFullscreen ? 'Exit' : 'Fullscreen'}
         </Button>
         <Button
-          variant="outline"
+          variant="neumo"
           size="sm"
           onClick={() => {
             dispatch(clearGraph());
             navigate('/analyze');
           }}
-          className="gap-1.5"
+          className="gap-2 h-9 px-4 rounded-xl"
         >
           <RotateCcw className="size-3.5" />
-          New analysis
+          Restart
         </Button>
       </div>
     </header>
