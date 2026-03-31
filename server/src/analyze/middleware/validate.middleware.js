@@ -95,3 +95,91 @@ export function validateBranchQuery(req, _res, next) {
 
   return next();
 }
+
+export function validateRepoBrowserQuery(req, _res, next) {
+  const hasOwner = isNonEmptyString(req.query?.owner);
+  const hasRepo = isNonEmptyString(req.query?.repo);
+  const hasUrl = isNonEmptyString(req.query?.url);
+
+  if (!hasUrl && !(hasOwner && hasRepo)) {
+    return fail(next, 'Repository query requires owner/repo or a valid GitHub URL.');
+  }
+
+  if (hasOwner) req.query.owner = req.query.owner.trim();
+  if (hasRepo) req.query.repo = req.query.repo.trim();
+  if (hasUrl) req.query.url = req.query.url.trim();
+
+  if (isNonEmptyString(req.query?.branch)) {
+    req.query.branch = req.query.branch.trim();
+  }
+
+  if (isNonEmptyString(req.query?.path)) {
+    req.query.path = req.query.path.trim().replace(/^\/+/, '').replace(/\/+$/, '');
+  }
+
+  return next();
+}
+
+export function validateRepoFileQuery(req, _res, next) {
+  const hasOwner = isNonEmptyString(req.query?.owner);
+  const hasRepo = isNonEmptyString(req.query?.repo);
+  const hasUrl = isNonEmptyString(req.query?.url);
+  const hasPath = isNonEmptyString(req.query?.path);
+
+  if (!hasPath) {
+    return fail(next, 'Repository file query requires a non-empty "path" value.');
+  }
+
+  if (!hasUrl && !(hasOwner && hasRepo)) {
+    return fail(next, 'Repository file query requires owner/repo or a valid GitHub URL.');
+  }
+
+  if (hasOwner) req.query.owner = req.query.owner.trim();
+  if (hasRepo) req.query.repo = req.query.repo.trim();
+  if (hasUrl) req.query.url = req.query.url.trim();
+  req.query.path = req.query.path.trim().replace(/^\/+/, '').replace(/\/+$/, '');
+
+  if (isNonEmptyString(req.query?.branch)) {
+    req.query.branch = req.query.branch.trim();
+  }
+
+  return next();
+}
+
+export function validateRepoFileUpdateBody(req, _res, next) {
+  const body = req.body ?? {};
+
+  const hasOwner = isNonEmptyString(body.owner);
+  const hasRepo = isNonEmptyString(body.repo);
+  const hasUrl = isNonEmptyString(body.url);
+
+  if (!hasUrl && !(hasOwner && hasRepo)) {
+    return fail(next, 'Repository file update requires owner/repo or a valid GitHub URL.');
+  }
+
+  if (!isNonEmptyString(body.path)) {
+    return fail(next, 'Repository file update requires a non-empty "path" string.');
+  }
+
+  if (typeof body.content !== 'string') {
+    return fail(next, 'Repository file update requires "content" as a string.');
+  }
+
+  if (!isNonEmptyString(body.sha)) {
+    return fail(next, 'Repository file update requires a non-empty "sha" string.');
+  }
+
+  req.body = {
+    source: body.source === 'owned' ? 'owned' : 'public',
+    ...(hasOwner ? { owner: body.owner.trim() } : {}),
+    ...(hasRepo ? { repo: body.repo.trim() } : {}),
+    ...(hasUrl ? { url: body.url.trim() } : {}),
+    path: body.path.trim().replace(/^\/+/, '').replace(/\/+$/, ''),
+    content: body.content,
+    sha: body.sha.trim(),
+    ...(isNonEmptyString(body.branch) ? { branch: body.branch.trim() } : {}),
+    ...(isNonEmptyString(body.message) ? { message: body.message.trim() } : {}),
+  };
+
+  return next();
+}

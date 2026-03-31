@@ -6,11 +6,15 @@ import {
   pickLocalDirectory,
 } from '../services/localPicker.service.js';
 import {
+  fetchRepoFileContent,
+  fetchRepoContents,
   fetchOwnedRepositories,
   fetchRepoBranches,
   fetchRepoDetails,
+  fetchRepoTree,
   parseGitHubRepoUrl,
   resolvePublicRepository,
+  updateRepoFileContent,
 } from '../services/githubApi.service.js';
 import { pgPool, redisClient } from '../../infrastructure/connections.js';
 import {
@@ -513,6 +517,223 @@ export async function listBranchesController(req, res, next) {
         defaultBranch: repoDetails.defaultBranch,
       },
       branches,
+    });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+function resolveRepoFromQuery(req) {
+  const source = req.query.source === 'owned' ? 'owned' : 'public';
+  const token = source === 'owned' ? req.cookies?.github_token : undefined;
+
+  const owner = typeof req.query.owner === 'string' ? req.query.owner.trim() : '';
+  const repo = typeof req.query.repo === 'string' ? req.query.repo.trim() : '';
+  const branch = typeof req.query.branch === 'string' ? req.query.branch.trim() : '';
+
+  let targetOwner = owner;
+  let targetRepo = repo;
+
+  if ((!targetOwner || !targetRepo) && typeof req.query.url === 'string') {
+    const parsed = parseGitHubRepoUrl(req.query.url);
+    targetOwner = parsed.owner;
+    targetRepo = parsed.repo;
+  }
+
+  if (!targetOwner || !targetRepo) {
+    const err = new Error('Repository lookup requires owner/repo or a valid GitHub URL.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  return {
+    source,
+    token,
+    owner: targetOwner,
+    repo: targetRepo,
+    branch,
+  };
+}
+
+export async function listRepositoryStructureController(req, res, next) {
+  try {
+    const { token, owner, repo, branch } = resolveRepoFromQuery(req);
+
+    const [repoDetails, repoTree] = await Promise.all([
+      fetchRepoDetails({ owner, repo, token }),
+      fetchRepoTree({ owner, repo, ref: branch, token }),
+    ]);
+
+    const topLevel = new Map();
+
+    for (const entry of repoTree.tree) {
+      const pathValue = String(entry?.path || '').trim();
+      if (!pathValue) continue;
+
+      const segments = pathValue.split('/').filter(Boolean);
+      if (!segments.length) continue;
+
+      const topDir = segments[0];
+      const isDirectoryPath = entry.type === 'tree';
+
+      if (!topLevel.has(topDir)) {
+        topLevel.set(topDir, {
+          name: topDir,
+          path: topDir,
+          fileCount: 0,
+          subdirectories: new Set(),
+        });
+      }
+
+      const current = topLevel.get(topDir);
+
+      if (entry.type === 'blob') {
+        current.fileCount += 1;
+      }
+
+      if (segments.length > 1) {
+        current.subdirectories.add(segments[1]);
+      } else if (segments.length === 1 && isDirectoryPath) {
+        current.subdirectories = current.subdirectories || new Set();
+      }
+    }
+
+    const directories = Array.from(topLevel.values())
+      .map((item) => ({
+        name: item.name,
+        path: item.path,
+        fileCount: item.fileCount,
+        subdirectories: Array.from(item.subdirectories)
+          .filter(Boolean)
+          .sort((a, b) => a.localeCompare(b)),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    return res.status(200).json({
+      repository: {
+        owner: repoDetails.owner,
+        repo: repoDetails.repo,
+        fullName: repoDetails.fullName,
+        branch: branch || repoDetails.defaultBranch || null,
+        defaultBranch: repoDetails.defaultBranch,
+        htmlUrl: `https://github.com/${repoDetails.owner}/${repoDetails.repo}`,
+      },
+      truncated: repoTree.truncated,
+      directories,
+    });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function listRepositoryDirectoryController(req, res, next) {
+  try {
+    const { token, owner, repo, branch } = resolveRepoFromQuery(req);
+    const requestedPath = typeof req.query.path === 'string'
+      ? req.query.path.trim().replace(/^\/+/, '').replace(/\/+$/, '')
+      : '';
+
+    const [repoDetails, entries] = await Promise.all([
+      fetchRepoDetails({ owner, repo, token }),
+      fetchRepoContents({ owner, repo, path: requestedPath, ref: branch, token }),
+    ]);
+
+    return res.status(200).json({
+      repository: {
+        owner: repoDetails.owner,
+        repo: repoDetails.repo,
+        fullName: repoDetails.fullName,
+        branch: branch || repoDetails.defaultBranch || null,
+        defaultBranch: repoDetails.defaultBranch,
+        htmlUrl: `https://github.com/${repoDetails.owner}/${repoDetails.repo}`,
+      },
+      path: requestedPath,
+      entries,
+    });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function getRepositoryFileController(req, res, next) {
+  try {
+    const { token, owner, repo, branch } = resolveRepoFromQuery(req);
+    const requestedPath = typeof req.query.path === 'string'
+      ? req.query.path.trim().replace(/^\/+/, '').replace(/\/+$/, '')
+      : '';
+
+    if (!requestedPath) {
+      const err = new Error('File path is required to load repository file content.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const [repoDetails, file] = await Promise.all([
+      fetchRepoDetails({ owner, repo, token }),
+      fetchRepoFileContent({ owner, repo, path: requestedPath, ref: branch, token }),
+    ]);
+
+    return res.status(200).json({
+      repository: {
+        owner: repoDetails.owner,
+        repo: repoDetails.repo,
+        fullName: repoDetails.fullName,
+        branch: branch || repoDetails.defaultBranch || null,
+        defaultBranch: repoDetails.defaultBranch,
+        htmlUrl: `https://github.com/${repoDetails.owner}/${repoDetails.repo}`,
+      },
+      file,
+      canEdit: req.query.source === 'owned',
+    });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function updateRepositoryFileController(req, res, next) {
+  try {
+    const source = req.body.source === 'owned' ? 'owned' : 'public';
+    const token = source === 'owned' ? req.cookies?.github_token : undefined;
+
+    let targetOwner = req.body.owner || '';
+    let targetRepo = req.body.repo || '';
+
+    if ((!targetOwner || !targetRepo) && typeof req.body.url === 'string') {
+      const parsed = parseGitHubRepoUrl(req.body.url);
+      targetOwner = parsed.owner;
+      targetRepo = parsed.repo;
+    }
+
+    if (!targetOwner || !targetRepo) {
+      const err = new Error('Repository update requires owner/repo or a valid GitHub URL.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    if (source !== 'owned') {
+      const err = new Error('Editing files is only supported for authenticated owned repositories.');
+      err.statusCode = 403;
+      throw err;
+    }
+
+    const updated = await updateRepoFileContent({
+      owner: targetOwner,
+      repo: targetRepo,
+      path: req.body.path,
+      ref: req.body.branch,
+      token,
+      content: req.body.content,
+      sha: req.body.sha,
+      message: req.body.message,
+    });
+
+    return res.status(200).json({
+      file: {
+        path: updated.path,
+        sha: updated.sha,
+        htmlUrl: updated.htmlUrl,
+        commitSha: updated.commitSha,
+      },
     });
   } catch (err) {
     return next(err);

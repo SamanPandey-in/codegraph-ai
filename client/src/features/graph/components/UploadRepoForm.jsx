@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/features/auth';
+import { setSelectedAnalyzeRepository } from '@/features/analyze';
 import { graphService } from '../services/graphService';
 import { analyzeCodebase, selectGraphStatus } from '../slices/graphSlice';
 
@@ -467,6 +468,42 @@ export default function UploadRepoForm() {
     if (source === 'github' && githubMode === 'owned' && !selectedOwnedRepo) {
       setOwnedReposError('Please select one of your repositories and a branch.');
       return;
+    }
+
+    if (source === 'local') {
+      dispatch(
+        setSelectedAnalyzeRepository({
+          source: 'local',
+          localPath: localPath.trim(),
+        }),
+      );
+    }
+
+    if (source === 'github' && githubMode === 'public' && publicRepoInfo) {
+      dispatch(
+        setSelectedAnalyzeRepository({
+          source: 'github',
+          mode: 'public',
+          owner: publicRepoInfo.owner,
+          repo: publicRepoInfo.repo,
+          branch: publicBranch,
+          url: publicRepoUrl.trim(),
+          fullName: publicRepoInfo.fullName,
+        }),
+      );
+    }
+
+    if (source === 'github' && githubMode === 'owned' && selectedOwnedRepo) {
+      dispatch(
+        setSelectedAnalyzeRepository({
+          source: 'github',
+          mode: 'owned',
+          owner: selectedOwnedRepo.owner,
+          repo: selectedOwnedRepo.name,
+          branch: ownedBranch,
+          fullName: selectedOwnedRepo.fullName,
+        }),
+      );
     }
 
     dispatch(analyzeCodebase(buildAnalyzePayload()));

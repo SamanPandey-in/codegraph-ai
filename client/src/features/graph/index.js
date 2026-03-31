@@ -1,5 +1,5 @@
 export { default as UploadRepoPage } from './pages/UploadRepoPage';
-at
+export { default as GraphPage } from './pages/GraphPage';
 
 export { default as GraphView } from './components/GraphView';
 export { default as UploadRepoForm } from './components/UploadRepoForm';
@@ -13,6 +13,7 @@ export {
   selectGraphData,
   selectGraphStatus,
   selectGraphError,
+  selectLastAnalyzeConfig,
   selectSelectedNodeId,
   default as graphReducer,
 } from './slices/graphSlice';

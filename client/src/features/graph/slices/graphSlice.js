@@ -157,6 +157,7 @@ const graphSlice = createSlice({
   initialState: {
     data: null,
     job: null,
+    lastAnalyzeConfig: null,
     heatmapMode: false,
     heatmapHotspots: {},
     selectedNodeId: null,
@@ -192,6 +193,7 @@ const graphSlice = createSlice({
     clearGraph(state) {
       state.data = null;
       state.job = null;
+      state.lastAnalyzeConfig = null;
       state.heatmapMode = false;
       state.heatmapHotspots = {};
       state.selectedNodeId = null;
@@ -201,11 +203,12 @@ const graphSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      .addCase(analyzeCodebase.pending, (state) => {
+      .addCase(analyzeCodebase.pending, (state, action) => {
         state.status = 'loading';
         state.error = null;
         state.data = null;
         state.job = null;
+        state.lastAnalyzeConfig = action.meta?.arg || null;
         state.heatmapMode = false;
         state.heatmapHotspots = {};
         state.selectedNodeId = null;
@@ -268,6 +271,7 @@ export const selectGraphData = (state) => state.graph.data;
 export const selectAnalysisJob = (state) => state.graph.job;
 export const selectGraphStatus = (state) => state.graph.status;
 export const selectGraphError = (state) => state.graph.error;
+export const selectLastAnalyzeConfig = (state) => state.graph.lastAnalyzeConfig;
 export const selectSelectedNodeId = (state) => state.graph.selectedNodeId;
 export const selectHeatmapMode = (state) => state.graph.heatmapMode;
 export const selectHeatmapHotspots = (state) => state.graph.heatmapHotspots;
