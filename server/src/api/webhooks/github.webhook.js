@@ -2,10 +2,6 @@ import crypto from 'node:crypto';
 import express from 'express';
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
-import { pgPool } from '../../infrastructure/connections.js';
-import { enqueueAnalysisJob } from '../../queue/analysisQueue.js';
-
-const router = Router();
 
 const webhookLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -51,172 +47,197 @@ function logWebhookEvent(level, message, context = {}) {
   }
 }
 
-router.post('/github', webhookLimiter, express.raw({ type: 'application/json' }), async (req, res, next) => {
-  const startTime = Date.now();
-  const signature = req.headers['x-github-signature-256'];
-  const event = String(req.headers['x-github-event'] || '').trim();
-  const deliveryId = req.headers['x-github-delivery'];
-  const secret = process.env.GITHUB_WEBHOOK_SECRET;
+export function createGitHubWebhookRouter({ db, enqueueJob } = {}) {
+  const router = Router();
 
-  if (!secret) {
-    logWebhookEvent('warn', 'Webhook secret not configured', {
-      event,
-      deliveryId,
-    });
-    return res.status(503).json({ error: 'Webhook secret is not configured.' });
+  let resolvedDb = db;
+  let resolvedEnqueueJob = enqueueJob;
+
+  async function resolveDependencies() {
+    if (!resolvedDb) {
+      const { pgPool } = await import('../../infrastructure/connections.js');
+      resolvedDb = pgPool;
+    }
+
+    if (!resolvedEnqueueJob) {
+      const { enqueueAnalysisJob } = await import('../../queue/analysisQueue.js');
+      resolvedEnqueueJob = enqueueAnalysisJob;
+    }
   }
 
-  const rawBody = Buffer.isBuffer(req.body)
-    ? req.body
-    : Buffer.from(typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {}));
+  router.post('/github', webhookLimiter, express.raw({ type: 'application/json' }), async (req, res, next) => {
+    const startTime = Date.now();
+    const signature = req.headers['x-github-signature-256'];
+    const event = String(req.headers['x-github-event'] || '').trim();
+    const deliveryId = req.headers['x-github-delivery'];
+    const secret = process.env.GITHUB_WEBHOOK_SECRET;
 
-  if (!verifySignature(rawBody, signature, secret)) {
-    logWebhookEvent('warn', 'Invalid signature', {
-      event,
-      deliveryId,
-      signatureLength: String(signature || '').length,
-    });
-    return res.status(401).send('Invalid signature');
-  }
+    if (!secret) {
+      logWebhookEvent('warn', 'Webhook secret not configured', {
+        event,
+        deliveryId,
+      });
+      return res.status(503).json({ error: 'Webhook secret is not configured.' });
+    }
 
-  let payload;
-  try {
-    payload = JSON.parse(rawBody.toString('utf8'));
-  } catch (parseErr) {
-    logWebhookEvent('error', 'Failed to parse JSON payload', {
-      event,
-      deliveryId,
-      error: parseErr.message,
-    });
-    return res.status(400).send('Invalid JSON payload');
-  }
+    const rawBody = Buffer.isBuffer(req.body)
+      ? req.body
+      : Buffer.from(typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {}));
 
-  if (event !== 'pull_request') {
-    logWebhookEvent('info', `Ignoring non-PR event`, {
-      event,
-      deliveryId,
-    });
-    return res.status(200).send('Ignored');
-  }
+    if (!verifySignature(rawBody, signature, secret)) {
+      logWebhookEvent('warn', 'Invalid signature', {
+        event,
+        deliveryId,
+        signatureLength: String(signature || '').length,
+      });
+      return res.status(401).send('Invalid signature');
+    }
 
-  const action = payload?.action;
-  if (!['opened', 'synchronize'].includes(action)) {
-    logWebhookEvent('info', `Ignoring PR action: ${action}`, {
-      event,
-      deliveryId,
-      action,
-    });
-    return res.status(200).send('Ignored');
-  }
+    let payload;
+    try {
+      payload = JSON.parse(rawBody.toString('utf8'));
+    } catch (parseErr) {
+      logWebhookEvent('error', 'Failed to parse JSON payload', {
+        event,
+        deliveryId,
+        error: parseErr.message,
+      });
+      return res.status(400).send('Invalid JSON payload');
+    }
 
-  try {
-    const owner = payload?.repository?.owner?.login;
-    const repo = payload?.repository?.name;
-    const branch = payload?.pull_request?.head?.ref;
-    const prNumber = payload?.pull_request?.number;
-    const prTitle = payload?.pull_request?.title;
-    const headSha = payload?.pull_request?.head?.sha;
+    if (event !== 'pull_request') {
+      logWebhookEvent('info', `Ignoring non-PR event`, {
+        event,
+        deliveryId,
+      });
+      return res.status(200).send('Ignored');
+    }
 
-    logWebhookEvent('info', `Processing PR ${action}`, {
-      event,
-      deliveryId,
-      action,
-      owner,
-      repo,
-      branch,
-      prNumber,
-      prTitle,
-    });
-
-    if (!owner || !repo || !branch) {
-      logWebhookEvent('warn', 'Invalid PR payload structure', {
+    const action = payload?.action;
+    if (!['opened', 'synchronize'].includes(action)) {
+      logWebhookEvent('info', `Ignoring PR action: ${action}`, {
         event,
         deliveryId,
         action,
-        owner: owner ? '✓' : '✗',
-        repo: repo ? '✓' : '✗',
-        branch: branch ? '✓' : '✗',
       });
-      return res.status(400).json({ error: 'Invalid pull request payload.' });
+      return res.status(200).send('Ignored');
     }
 
-    const repoResult = await pgPool.query(
-      `
-        SELECT id, owner_id
-        FROM repositories
-        WHERE github_owner = $1 AND github_repo = $2
-        LIMIT 1
-      `,
-      [owner, repo],
-    );
+    try {
+      await resolveDependencies();
 
-    if (repoResult.rowCount === 0) {
-      logWebhookEvent('info', 'Repository not tracked in CodeGraph', {
+      const owner = payload?.repository?.owner?.login;
+      const repo = payload?.repository?.name;
+      const branch = payload?.pull_request?.head?.ref;
+      const prNumber = payload?.pull_request?.number;
+      const prTitle = payload?.pull_request?.title;
+      const headSha = payload?.pull_request?.head?.sha;
+
+      logWebhookEvent('info', `Processing PR ${action}`, {
         event,
         deliveryId,
+        action,
         owner,
         repo,
         branch,
+        prNumber,
+        prTitle,
       });
-      return res.status(200).send('Repository not tracked');
-    }
 
-    const { id: repositoryId, owner_id: userId } = repoResult.rows[0];
+      if (!owner || !repo || !branch) {
+        logWebhookEvent('warn', 'Invalid PR payload structure', {
+          event,
+          deliveryId,
+          action,
+          owner: owner ? 'yes' : 'no',
+          repo: repo ? 'yes' : 'no',
+          branch: branch ? 'yes' : 'no',
+        });
+        return res.status(400).json({ error: 'Invalid pull request payload.' });
+      }
 
-    const jobResult = await pgPool.query(
-      `
-        INSERT INTO analysis_jobs (repository_id, user_id, branch, status, metadata)
-        VALUES ($1, $2, $3, 'queued', $4)
-        RETURNING id
-      `,
-      [repositoryId, userId, branch, JSON.stringify({ prNumber, prTitle })],
-    );
+      const repoResult = await resolvedDb.query(
+        `
+          SELECT id, owner_id
+          FROM repositories
+          WHERE github_owner = $1 AND github_repo = $2
+          LIMIT 1
+        `,
+        [owner, repo],
+      );
 
-    const jobId = jobResult.rows[0].id;
-    
-    await enqueueAnalysisJob({
-      jobId,
-      input: {
-        source: 'github',
-        github: {
+      if (repoResult.rowCount === 0) {
+        logWebhookEvent('info', 'Repository not tracked in CodeGraph', {
+          event,
+          deliveryId,
           owner,
           repo,
           branch,
-          prNumber,
-          prTitle,
-          headSha,
+        });
+        return res.status(200).send('Repository not tracked');
+      }
+
+      const { id: repositoryId, owner_id: userId } = repoResult.rows[0];
+
+      const jobResult = await resolvedDb.query(
+        `
+          INSERT INTO analysis_jobs (repository_id, user_id, branch, status, metadata)
+          VALUES ($1, $2, $3, 'queued', $4)
+          RETURNING id
+        `,
+        [repositoryId, userId, branch, JSON.stringify({ prNumber, prTitle })],
+      );
+
+      const jobId = jobResult.rows[0].id;
+
+      await resolvedEnqueueJob({
+        jobId,
+        input: {
+          source: 'github',
+          github: {
+            owner,
+            repo,
+            branch,
+            prNumber,
+            prTitle,
+            headSha,
+          },
+          repositoryId,
+          userId,
         },
-        repositoryId,
-        userId,
-      },
-    });
+      });
 
-    const processingTime = Date.now() - startTime;
-    logWebhookEvent('info', `Analysis job queued successfully`, {
-      event,
-      deliveryId,
-      action,
-      jobId,
-      owner,
-      repo,
-      branch,
-      prNumber,
-      processingTimeMs: processingTime,
-    });
+      const processingTime = Date.now() - startTime;
+      logWebhookEvent('info', `Analysis job queued successfully`, {
+        event,
+        deliveryId,
+        action,
+        jobId,
+        owner,
+        repo,
+        branch,
+        prNumber,
+        processingTimeMs: processingTime,
+      });
 
-    return res.status(200).send('Queued');
-  } catch (error) {
-    const processingTime = Date.now() - startTime;
-    logWebhookEvent('error', `Failed to process webhook: ${error.message}`, {
-      event,
-      deliveryId,
-      action,
-      error: error.message,
-      processingTimeMs: processingTime,
-      stack: error.stack,
-    });
-    return next(error);
-  }
-});
+      return res.status(200).send('Queued');
+    } catch (error) {
+      const processingTime = Date.now() - startTime;
+      logWebhookEvent('error', `Failed to process webhook: ${error.message}`, {
+        event,
+        deliveryId,
+        action,
+        error: error.message,
+        processingTimeMs: processingTime,
+        stack: error.stack,
+      });
+      return next(error);
+    }
+  });
+
+  return router;
+}
+
+const router = createGitHubWebhookRouter();
 
 export default router;

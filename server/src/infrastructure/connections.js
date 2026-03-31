@@ -19,13 +19,24 @@ pgPool.on('error', (err) => {
 
 const redisHost = process.env.REDIS_HOST || '127.0.0.1';
 const redisPort = Number(process.env.REDIS_PORT || 6379);
+const isTestRuntime = process.argv.includes('--test') || Boolean(process.env.VITEST);
+
+const redisOptions = {
+	maxRetriesPerRequest: null,
+	lazyConnect: true,
+	...(isTestRuntime
+		? {
+			retryStrategy: () => null,
+		}
+		: {}),
+};
 
 export const redisClient = process.env.REDIS_URL
-	? new Redis(process.env.REDIS_URL, { maxRetriesPerRequest: null })
+	? new Redis(process.env.REDIS_URL, redisOptions)
 	: new Redis({
 			host: redisHost,
 			port: redisPort,
-			maxRetriesPerRequest: null,
+			...redisOptions,
 		});
 
 redisClient.on('connect', () => {
