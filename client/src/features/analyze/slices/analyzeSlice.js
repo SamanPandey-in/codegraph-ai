@@ -24,6 +24,8 @@ function normalizeRepository(input) {
     branch: github.branch || null,
     url: github.url || null,
     fullName: github.fullName || `${github.owner}/${github.repo}`,
+    jobId: github.jobId || null,
+    latestJobId: github.latestJobId || null,
   };
 }
 

@@ -31,6 +31,8 @@ import {
   selectAnalyzeSelectedRepository,
   selectAnalyzeStructure,
 } from '../slices/analyzeSlice';
+import { AiPanel } from '@/features/ai';
+import { loadSavedGraph, selectGraphData } from '@/features/graph';
 
 function detectPrismLanguage(filePath = '') {
   const normalized = String(filePath).toLowerCase();
@@ -59,6 +61,7 @@ export default function AnalyzeFilePage() {
   const selectedRepository = useSelector(selectAnalyzeSelectedRepository);
   const structure = useSelector(selectAnalyzeStructure);
   const fileState = useSelector(selectAnalyzeFile);
+  const graphData = useSelector(selectGraphData);
 
   const [editorValue, setEditorValue] = useState('');
   const [isEditing, setIsEditing] = useState(false);
@@ -91,6 +94,20 @@ export default function AnalyzeFilePage() {
     if (!selectedFilePath) return;
     dispatch(fetchRepositoryFile({ path: selectedFilePath }));
   }, [dispatch, selectedFilePath]);
+
+  const analysisJobId = selectedRepository?.jobId || selectedRepository?.latestJobId || graphData?.jobId || null;
+
+  useEffect(() => {
+    if (!analysisJobId) return;
+    if (graphData?.jobId === analysisJobId) return;
+
+    dispatch(
+      loadSavedGraph({
+        jobId: analysisJobId,
+        rootDir: selectedRepository?.fullName || null,
+      }),
+    );
+  }, [analysisJobId, dispatch, graphData?.jobId, selectedRepository?.fullName]);
 
   useEffect(() => {
     const fileContent = fileState.data?.content;
@@ -138,38 +155,52 @@ export default function AnalyzeFilePage() {
     setIsEditing(false);
   };
 
-  const syncEditorScroll = () => {
-    if (!editorGutterRef.current || !editorTextareaRef.current) return;
-    editorGutterRef.current.scrollTop = editorTextareaRef.current.scrollTop;
-  };
 
-  const syncViewerScroll = () => {
-    if (!viewerGutterRef.current || !viewerCodeRef.current) return;
-    viewerGutterRef.current.scrollTop = viewerCodeRef.current.scrollTop;
-  };
 
   const backToExplorer = `/analyze/${encodeURIComponent(routeDirectory)}?path=${encodeURIComponent(currentPath)}`;
 
+  const aiGraph = useMemo(() => {
+    const graphObject = graphData?.graph;
+
+    if (graphObject && typeof graphObject === 'object' && !Array.isArray(graphObject)) {
+      return graphObject;
+    }
+
+    const fallbackNodes = Array.isArray(graphData?.nodes) ? graphData.nodes : [];
+    return fallbackNodes.reduce((acc, node) => {
+      if (!node?.id) return acc;
+      acc[node.id] = {
+        deps: Array.isArray(node.deps) ? node.deps : [],
+        type: node.type || 'file',
+        summary: node.summary || null,
+        declarations: Array.isArray(node.declarations) ? node.declarations : [],
+      };
+      return acc;
+    }, {});
+  }, [graphData?.graph, graphData?.nodes]);
+
+  const hasNodeInsights = Boolean(selectedFilePath && aiGraph?.[selectedFilePath]);
+
   return (
-    <section className="mx-auto w-full max-w-375 px-4 pb-10 pt-7">
+    <section className="mx-auto w-full max-w-475 px-4 pb-10 pt-7 2xl:px-6">
       <div className="mb-5">
         <Link
           to={backToExplorer}
-          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          className="inline-flex items-center gap-2 text-sm text-muted-foreground/80 hover:text-foreground active-scale transition-all"
         >
           <ArrowLeft className="size-4" />
           Back to Explorer
         </Link>
       </div>
 
-      <header className="rounded-2xl border border-border/60 bg-card/70 px-5 py-6">
+      <header className="rounded-2xl shadow-neu-inset border-none bg-background/40 px-5 py-6">
         {structure.repository?.fullName && (
-          <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
-            <span className="rounded-md border border-border/60 bg-background/60 px-2.5 py-1 font-semibold">
+          <div className="mt-4 flex flex-wrap items-center gap-4 text-xs font-bold tracking-tight">
+            <span className="rounded-xl shadow-neu-inset border-none bg-background/60 px-3 py-1.5 ">
               {structure.repository.fullName}
             </span>
-            <span className="inline-flex items-center gap-1 rounded-md border border-border/60 bg-background/60 px-2.5 py-1 font-semibold">
-              <GitBranch className="size-3.5" />
+            <span className="inline-flex items-center gap-1.5 rounded-xl shadow-neu-inset border-none bg-background/60 px-3 py-1.5 ">
+              <GitBranch className="size-3.5 text-primary" />
               {structure.repository.branch || structure.repository.defaultBranch || 'default'}
             </span>
             {fileState.data?.htmlUrl && (
@@ -177,7 +208,7 @@ export default function AnalyzeFilePage() {
                 href={fileState.data.htmlUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
+                className="inline-flex items-center gap-1.5 text-muted-foreground/80 hover:text-foreground active-scale transition-all"
               >
                 View on GitHub
                 <ExternalLink className="size-3.5" />
@@ -194,11 +225,12 @@ export default function AnalyzeFilePage() {
       )}
 
       {selectedFilePath && (
-        <div className="mt-6 rounded-2xl border border-border/60 bg-card/80">
-          <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-3">
+        <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1fr)_17.5rem] 2xl:grid-cols-[minmax(0,1fr)_18.5rem]">
+          <div className="rounded-2xl shadow-neu-inset border-none bg-background/40">
+          <div className="flex items-center justify-between gap-3 border-b border-border/10 px-5 py-4">
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">File</p>
-              <p className="truncate text-sm font-medium">{selectedFilePath}</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60">File</p>
+              <p className="truncate text-sm font-display font-bold tracking-tight">{selectedFilePath}</p>
             </div>
 
             <div className="flex items-center gap-2">
@@ -208,6 +240,7 @@ export default function AnalyzeFilePage() {
                   variant="outline"
                   onClick={() => setIsEditing(true)}
                   disabled={!fileState.canEdit || fileState.status === 'loading'}
+                  className="rounded-xl shadow-neu-inset border-none bg-background/50 active-scale"
                 >
                   <Edit3 className="size-3.5" />
                   Edit
@@ -221,6 +254,7 @@ export default function AnalyzeFilePage() {
                       setEditorValue(fileState.data?.content || '');
                       setIsEditing(false);
                     }}
+                    className="rounded-xl shadow-neu-inset border-none bg-background/50 active-scale"
                   >
                     <X className="size-3.5" />
                     Cancel
@@ -229,6 +263,7 @@ export default function AnalyzeFilePage() {
                     size="sm"
                     onClick={handleSaveFile}
                     disabled={!hasUnsavedChanges || fileState.saveStatus === 'loading'}
+                    className="rounded-xl bg-gold text-white shadow-md active-scale"
                   >
                     <Save className="size-3.5" />
                     {fileState.saveStatus === 'loading' ? 'Saving...' : 'Save'}
@@ -249,44 +284,47 @@ export default function AnalyzeFilePage() {
           )}
 
           {fileState.status === 'succeeded' && fileState.data && (
-            <div className="p-3">
+            <div className="p-4">
               {isEditing ? (
-                <div className="flex h-96 overflow-hidden rounded-xl border border-border/60 bg-background/90">
-                  <pre
-                    ref={editorGutterRef}
-                    aria-hidden="true"
-                    className="w-14 shrink-0 overflow-hidden border-r border-border/60 bg-muted/50 px-2 py-3 text-right font-mono text-xs leading-5 text-muted-foreground"
-                  >
-                    {Array.from({ length: editorLineCount }, (_, i) => i + 1).join('\n')}
-                  </pre>
-                  <textarea
-                    ref={editorTextareaRef}
-                    value={editorValue}
-                    onChange={(e) => setEditorValue(e.target.value)}
-                    onScroll={syncEditorScroll}
-                    spellCheck={false}
-                    className="h-full w-full resize-none bg-transparent px-3 py-3 font-mono text-xs leading-5 outline-none"
-                  />
+                <div className="flex rounded-2xl shadow-neu-inset border-none bg-background/60 overflow-x-auto custom-scrollbar">
+                  <div className="flex min-w-full">
+                    <pre
+                      ref={editorGutterRef}
+                      aria-hidden="true"
+                      className="sticky left-0 z-10 w-14 shrink-0 border-r border-border/10 bg-background/20 px-2 py-3 text-right font-mono text-xs leading-5 text-muted-foreground/60"
+                    >
+                      {Array.from({ length: editorLineCount }, (_, i) => i + 1).join('\n')}
+                    </pre>
+                    <textarea
+                      ref={editorTextareaRef}
+                      value={editorValue}
+                      onChange={(e) => setEditorValue(e.target.value)}
+                      spellCheck={false}
+                      rows={editorLineCount}
+                      className="min-w-max flex-1 resize-none bg-transparent px-3 py-3 font-mono text-xs leading-5 outline-none whitespace-pre overflow-hidden text-foreground/90"
+                    />
+                  </div>
                 </div>
               ) : (
-                <div className="flex h-96 overflow-hidden rounded-xl border border-border/60 bg-background/90">
-                  <pre
-                    ref={viewerGutterRef}
-                    aria-hidden="true"
-                    className="w-14 shrink-0 overflow-hidden border-r border-border/60 bg-muted/50 px-2 py-3 text-right font-mono text-xs leading-5 text-muted-foreground"
-                  >
-                    {Array.from({ length: viewerLineCount }, (_, i) => i + 1).join('\n')}
-                  </pre>
-                  <pre
-                    ref={viewerCodeRef}
-                    onScroll={syncViewerScroll}
-                    className="h-full w-full overflow-auto px-3 py-3 font-mono text-xs leading-5"
-                  >
-                    <code
-                      className={`language-${codeLanguage}`}
-                      dangerouslySetInnerHTML={{ __html: highlightedContent }}
-                    />
-                  </pre>
+                <div className="flex rounded-2xl shadow-neu-inset border-none bg-background/60 overflow-x-auto custom-scrollbar">
+                  <div className="flex min-w-full">
+                    <pre
+                      ref={viewerGutterRef}
+                      aria-hidden="true"
+                      className="sticky left-0 z-10 w-14 shrink-0 border-r border-border/10 bg-background/20 px-2 py-3 text-right font-mono text-xs leading-5 text-muted-foreground/60"
+                    >
+                      {Array.from({ length: viewerLineCount }, (_, i) => i + 1).join('\n')}
+                    </pre>
+                    <pre
+                      ref={viewerCodeRef}
+                      className="min-w-max flex-1 px-4 py-3 font-mono text-xs leading-5 overflow-visible whitespace-pre"
+                    >
+                      <code
+                        className={`language-${codeLanguage}`}
+                        dangerouslySetInnerHTML={{ __html: highlightedContent }}
+                      />
+                    </pre>
+                  </div>
                 </div>
               )}
 
@@ -308,6 +346,21 @@ export default function AnalyzeFilePage() {
               )}
             </div>
           )}
+          </div>
+
+          <div className="relative min-h-104 xl:justify-self-end xl:w-full">
+            {hasNodeInsights ? (
+              <AiPanel
+                nodeId={selectedFilePath}
+                graph={aiGraph}
+                onClose={() => navigate(backToExplorer)}
+              />
+            ) : (
+              <div className="rounded-xl border border-border/50 bg-background/40 p-3 text-xs text-muted-foreground">
+                Insight panel is available after graph data is loaded for this repository/job.
+              </div>
+            )}
+          </div>
         </div>
       )}
     </section>

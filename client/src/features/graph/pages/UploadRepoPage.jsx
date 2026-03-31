@@ -22,13 +22,13 @@ export default function UploadRepoPage() {
     <div className="min-h-screen bg-background">
       <UploadRepoForm />
       {data && status !== 'loading' && (
-        <div className="mx-auto max-w-2xl px-4 py-6">
-          <div className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-card/70 px-4 py-3">
-            <p className="text-sm text-muted-foreground">
-              Active graph ready for {data?.rootDir || 'the selected analysis'}.
+        <div className="mx-auto max-w-2xl px-4 py-8">
+          <div className="flex items-center justify-between gap-4 rounded-2xl shadow-neu-inset border-none bg-background/60 px-6 py-4 animate-in fade-in zoom-in-95 duration-500">
+            <p className="text-sm text-muted-foreground/80 font-medium">
+              Active graph ready for <span className="text-foreground font-bold">{data?.rootDir || 'the selected analysis'}</span>.
             </p>
             <Link to="/graph">
-              <Button size="sm" variant="outline">Open graph</Button>
+              <Button size="sm" variant="outline" className="rounded-xl shadow-neu-inset border-none bg-background/50 active-scale">Open graph</Button>
             </Link>
           </div>
         </div>
@@ -41,10 +41,10 @@ export default function UploadRepoPage() {
       )}
 
       {status === 'failed' && error && (
-        <div className="mx-auto max-w-lg px-4 py-6">
-          <div className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div className="mx-auto max-w-lg px-4 py-8">
+          <div className="flex items-start gap-3 rounded-2xl shadow-neu-inset border-none bg-destructive/5 px-6 py-4 text-sm text-destructive animate-in shake duration-500">
             <AlertCircle className="mt-0.5 size-4 shrink-0" />
-            <span>{error}</span>
+            <span className="font-medium">{error}</span>
           </div>
         </div>
       )}

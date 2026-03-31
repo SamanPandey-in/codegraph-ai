@@ -32,7 +32,7 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen bg-background font-sans selection:bg-gold/30 selection:text-gold items-center justify-center p-4 sm:p-8">
-      <div className="flex w-full max-w-5xl h-[700px] overflow-hidden rounded-[2.5rem] shadow-2xl border border-border/10 bg-card group/container">
+      <div className="flex w-full max-w-5xl h-[700px] overflow-hidden rounded-[2.5rem] shadow-neu-inset border-none bg-background/40 group/container">
         {/* Left Side: Form */}
         <div className="flex flex-col justify-center w-full lg:w-1/2 p-8 sm:p-12 relative animate-in fade-in slide-in-from-left-8 duration-1000">
           <div className="mb-10 flex items-center gap-2 group cursor-pointer">
@@ -70,9 +70,9 @@ export default function LoginPage() {
                   {demoLoading ? 'Authenticating...' : 'Sign in as Demo User'}
                 </Button>
                 
-                <div className="rounded-2xl bg-gold/5 border border-gold/10 p-4 text-[10px] text-center">
+                <div className="rounded-2xl bg-background/60 shadow-neu-inset border-none p-4 text-[10px] text-center">
                   <span className="uppercase font-black tracking-widest text-muted-foreground/60 block mb-1">Development Mode</span>
-                  <span className="text-foreground/70 font-mono">
+                  <span className="text-foreground/70 font-mono tracking-tight font-bold">
                     {demoCredentials.username} <span className="mx-2 opacity-30">|</span> {demoCredentials.password}
                   </span>
                 </div>
@@ -94,14 +94,14 @@ export default function LoginPage() {
         </div>
 
         {/* Right Side: Visual Accent */}
-        <div className="hidden lg:flex flex-col justify-end w-1/2 bg-[#0B0B0B] p-16 relative overflow-hidden animate-in fade-in slide-in-from-right-8 duration-1000">
+        <div className="hidden lg:flex flex-col justify-end w-1/2 bg-black/40 backdrop-blur-md p-16 relative overflow-hidden animate-in fade-in slide-in-from-right-8 duration-1000">
           {/* Abstract Gold Art */}
           <div className="absolute inset-0 opacity-40">
-            <div className="absolute top-[-10%] right-[-10%] size-[500px] rounded-full bg-gold/20 blur-[120px] animate-pulse" />
-            <div className="absolute bottom-[-20%] left-[-10%] size-[400px] rounded-full bg-gold/10 blur-[100px]" />
+            <div className="absolute top-[-10%] right-[-10%] size-[500px] rounded-full bg-gold/5 blur-[120px] animate-pulse" />
+            <div className="absolute bottom-[-20%] left-[-10%] size-[400px] rounded-full bg-gold/5 blur-[100px]" />
           </div>
           
-          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10" />
+          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-5" />
 
           <div className="relative z-10 space-y-6">
             <div className="size-16 rounded-3xl bg-gold/10 border border-gold/30 flex items-center justify-center shadow-lg backdrop-blur-sm">

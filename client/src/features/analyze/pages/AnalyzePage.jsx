@@ -96,23 +96,23 @@ export default function AnalyzePage() {
         </Link>
       </div>
 
-      <header className="rounded-2xl border border-border/60 bg-card/70 px-5 py-6">
-        <h1 className="text-3xl font-bold tracking-tight">
+      <header className="rounded-2xl shadow-neu-inset border-none bg-background/40 px-5 py-6">
+        <h1 className="text-3xl font-display font-bold tracking-tight text-foreground">
           {isFirstAnalyzePage && 'Analyze Repository Structure'}
         </h1>
         {isFirstAnalyzePage && (
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="mt-2 text-sm text-muted-foreground/80 font-medium">
             Top-level directories from the selected GitHub repository.
           </p>
         )}
 
         {!isFirstAnalyzePage && structure.repository?.fullName && (
           <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
-            <span className="rounded-md border border-border/60 bg-background/60 px-2.5 py-1 font-semibold">
+            <span className="rounded-xl shadow-neu-inset border-none bg-background/60 px-3 py-1.5 font-bold tracking-tight">
               {structure.repository.fullName}
             </span>
-            <span className="inline-flex items-center gap-1 rounded-md border border-border/60 bg-background/60 px-2.5 py-1 font-semibold">
-              <GitBranch className="size-3.5" />
+            <span className="inline-flex items-center gap-1.5 rounded-xl shadow-neu-inset border-none bg-background/60 px-3 py-1.5 font-bold tracking-tight">
+              <GitBranch className="size-3.5 text-primary" />
               {structure.repository.branch || structure.repository.defaultBranch || 'default'}
             </span>
             {structure.repository.htmlUrl && (
@@ -120,7 +120,7 @@ export default function AnalyzePage() {
                 href={structure.repository.htmlUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
+                className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground active-scale transition-all"
               >
                 View on GitHub
                 <ExternalLink className="size-3.5" />
@@ -151,23 +151,23 @@ export default function AnalyzePage() {
       {!routeDirectory && structure.status === 'succeeded' && (
         <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {structure.directories.map((directory) => (
-            <button
-              key={directory.path}
-              type="button"
-              onClick={() => handleCardOpen(directory.path)}
-              className="group rounded-2xl border border-border/60 bg-card/70 p-4 text-left transition-all hover:border-primary/40 hover:bg-card"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="flex items-center gap-2 text-lg font-bold tracking-tight">
-                    <FolderTree className="size-4 text-primary" />
-                    {directory.name}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">{formatCount(directory.fileCount)} | click to explore</p>
+              <button
+                key={directory.path}
+                type="button"
+                onClick={() => handleCardOpen(directory.path)}
+                className="group rounded-2xl shadow-neu-inset border-none bg-background/40 p-5 text-left transition-all hover:bg-background/60 active-scale duration-300"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="flex items-center gap-2 text-lg font-display font-bold tracking-tight text-foreground">
+                      <FolderTree className="size-4 text-primary group-hover:scale-110 transition-transform" />
+                      {directory.name}
+                    </p>
+                    <p className="mt-1 text-[10px] uppercase font-bold tracking-widest text-muted-foreground/60">{formatCount(directory.fileCount)} | EXPLORE</p>
+                  </div>
                 </div>
-              </div>
 
-              <div className="mt-3 min-h-16 rounded-xl border border-border/40 bg-background/50 p-3">
+                <div className="mt-4 min-h-16 rounded-xl shadow-neu-inset border-none bg-background/30 p-3">
                 {directory.subdirectories.length === 0 ? (
                   <p className="text-xs text-muted-foreground">No nested directories</p>
                 ) : (
@@ -175,14 +175,14 @@ export default function AnalyzePage() {
                     {directory.subdirectories.slice(0, 8).map((subDir) => (
                       <span
                         key={`${directory.path}-${subDir}`}
-                        className="rounded-md border border-border/60 bg-card px-2 py-1 text-[11px] font-medium"
+                        className="rounded-lg shadow-neu-inset border-none bg-background/50 px-2 py-1 text-[10px] font-bold tracking-tight text-muted-foreground/80"
                       >
                         {subDir}
                       </span>
                     ))}
                     {directory.subdirectories.length > 8 && (
-                      <span className="rounded-md border border-border/60 bg-card px-2 py-1 text-[11px] font-medium text-muted-foreground">
-                        +{directory.subdirectories.length - 8} more
+                      <span className="rounded-lg shadow-neu-inset border-none bg-background/50 px-2 py-1 text-[10px] font-bold tracking-tight text-muted-foreground/50">
+                        +{directory.subdirectories.length - 8}
                       </span>
                     )}
                   </div>
@@ -194,13 +194,13 @@ export default function AnalyzePage() {
       )}
 
       {routeDirectory && (
-        <div className="mt-6 rounded-2xl border border-border/60 bg-card/80">
-          <div className="border-b border-border/60 px-4 py-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Repository explorer</p>
-            <div className="mt-1 flex flex-wrap items-center gap-1 text-sm">
+        <div className="mt-6 rounded-2xl shadow-neu-inset border-none bg-background/40">
+          <div className="border-b border-border/10 px-5 py-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60">Repository explorer</p>
+            <div className="mt-2 flex flex-wrap items-center gap-1 text-sm">
               <button
                 type="button"
-                className="rounded px-1.5 py-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                className="rounded-lg px-2 py-1 text-muted-foreground/80 hover:bg-muted/40 hover:text-foreground active-scale transition-all"
                 onClick={() => navigate('/analyze')}
               >
                 root
@@ -209,10 +209,10 @@ export default function AnalyzePage() {
                 const nextPath = pathSegments.slice(0, index + 1).join('/');
                 return (
                   <React.Fragment key={nextPath}>
-                    <span className="text-muted-foreground">/</span>
+                    <span className="text-muted-foreground/40">/</span>
                     <button
                       type="button"
-                      className="rounded px-1.5 py-0.5 hover:bg-muted"
+                      className="rounded-lg px-2 py-1 hover:bg-muted/40 active-scale transition-all"
                       onClick={() => setSearchParams({ path: nextPath })}
                     >
                       {segment}
@@ -235,14 +235,14 @@ export default function AnalyzePage() {
             )}
 
             {contents.status === 'succeeded' && (
-              <div className="overflow-hidden rounded-xl border border-border/60 bg-background/70">
+              <div className="overflow-hidden rounded-xl shadow-neu-inset border-none bg-background/30">
                 {contents.entries.map((entry) => {
                   const isDirectory = entry.type === 'dir';
 
                   return (
                     <div
                       key={entry.path}
-                      className="flex items-center justify-between gap-3 border-b border-border/40 px-3 py-2 text-sm last:border-b-0"
+                      className="flex items-center justify-between gap-3 border-b border-border/10 px-4 py-2.5 text-sm last:border-b-0 hover:bg-background/20 transition-colors"
                     >
                       <div className="min-w-0 flex-1">
                         {isDirectory ? (

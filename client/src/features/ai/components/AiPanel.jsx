@@ -105,7 +105,7 @@ export default function AiPanel({ nodeId, graph, onClose }) {
   };
 
   return (
-    <div className="absolute top-2 right-2 z-10 w-80 max-h-[85vh] overflow-y-auto rounded-xl border border-border bg-card/95 backdrop-blur-sm p-4 text-xs shadow-xl transition-all">
+    <div className="w-full rounded-xl border border-border bg-card/95 backdrop-blur-sm p-4 text-xs shadow-xl transition-all">
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="flex items-center gap-1.5 min-w-0">
           <span className="font-mono font-semibold text-foreground truncate">{nodeId}</span>
@@ -240,7 +240,7 @@ export default function AiPanel({ nodeId, graph, onClose }) {
 
         {impactedFiles.length > 0 && (
           <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-2">
-            <ul className="flex flex-col gap-0.5 max-h-24 overflow-y-auto custom-scrollbar">
+            <ul className="flex flex-col gap-0.5 custom-scrollbar">
               {impactedFiles.map((file) => (
                 <li key={file} className="font-mono text-amber-200/80 truncate">{file}</li>
               ))}
@@ -252,7 +252,7 @@ export default function AiPanel({ nodeId, graph, onClose }) {
       {deps.length > 0 && (
         <div className="mb-3">
           <p className="mb-1 text-muted-foreground/60 uppercase tracking-wider text-[10px]">Imports ({deps.length})</p>
-          <ul className="flex flex-col gap-0.5 max-h-28 overflow-y-auto custom-scrollbar">
+          <ul className="flex flex-col gap-0.5 custom-scrollbar">
             {deps.map((dep) => (
               <li key={dep} className="font-mono text-gold/80 truncate">{dep}</li>
             ))}
@@ -263,7 +263,7 @@ export default function AiPanel({ nodeId, graph, onClose }) {
       {usedBy.length > 0 && (
         <div className="mb-3">
           <p className="mb-1 text-muted-foreground/60 uppercase tracking-wider text-[10px]">Used By ({usedBy.length})</p>
-          <ul className="flex flex-col gap-0.5 max-h-28 overflow-y-auto custom-scrollbar">
+          <ul className="flex flex-col gap-0.5 custom-scrollbar">
             {usedBy.map((file) => (
               <li key={file} className="font-mono text-foreground/70 truncate">{file}</li>
             ))}

@@ -346,6 +346,8 @@ export default function DashboardPage() {
       repo: repo.name,
       branch: repo.branch || 'main',
       fullName: repo.fullName || `${repo.owner}/${repo.name}`,
+      jobId: repo.jobId || null,
+      latestJobId: repo.latestJobId || null,
     };
   };
 
@@ -353,6 +355,40 @@ export default function DashboardPage() {
     const selectedRepo = buildAnalyzeRepositoryFromRepo(repo);
     if (!selectedRepo) return;
     dispatch(setSelectedAnalyzeRepository(selectedRepo));
+  };
+
+  const buildAnalyzeRepositoryFromJob = (repo, job) => {
+    const selectedRepo = buildAnalyzeRepositoryFromRepo(repo);
+    if (!selectedRepo) return null;
+
+    if (selectedRepo.source !== 'github') {
+      return selectedRepo;
+    }
+
+    return {
+      ...selectedRepo,
+      branch: job?.branch || selectedRepo.branch,
+      jobId: job?.id || selectedRepo.jobId || null,
+      latestJobId: job?.id || selectedRepo.latestJobId || null,
+    };
+  };
+
+  const handleOpenAnalyzePage = (repo, e) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    handleSelectAnalyzeRepository(repo);
+    navigate('/analyze');
+  };
+
+  const handleOpenAnalyzePageForJob = (repo, job, e) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+
+    const selectedRepo = buildAnalyzeRepositoryFromJob(repo, job);
+    if (!selectedRepo) return;
+
+    dispatch(setSelectedAnalyzeRepository(selectedRepo));
+    navigate('/analyze');
   };
 
   const toggleJobs = (repoId) => {
@@ -741,6 +777,17 @@ export default function DashboardPage() {
                         </Button>
 
                         {graphLink ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={(e) => handleOpenAnalyzePage(repo, e)}
+                          >
+                            Analyze Codebase
+                          </Button>
+                        ) : null}
+
+                        {graphLink ? (
                           <Button size="sm" variant="outline" asChild>
                             <Link
                               to={graphLink.to}
@@ -792,15 +839,25 @@ export default function DashboardPage() {
                                     </div>
 
                                     {jobGraphLink ? (
-                                      <Button size="sm" variant="outline" asChild>
-                                        <Link
-                                          to={jobGraphLink.to}
-                                          state={jobGraphLink.state}
-                                          onClick={() => handleSelectAnalyzeRepository(repo)}
+                                      <div className="flex items-center gap-2">
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={(e) => handleOpenAnalyzePageForJob(repo, job, e)}
                                         >
-                                          Open graph
-                                        </Link>
-                                      </Button>
+                                          Analyze Codebase
+                                        </Button>
+                                        <Button size="sm" variant="outline" asChild>
+                                          <Link
+                                            to={jobGraphLink.to}
+                                            state={jobGraphLink.state}
+                                            onClick={() => handleSelectAnalyzeRepository(repo)}
+                                          >
+                                            Open graph
+                                          </Link>
+                                        </Button>
+                                      </div>
                                     ) : (
                                       <Button type="button" size="sm" variant="outline" disabled>
                                         Not restorable
