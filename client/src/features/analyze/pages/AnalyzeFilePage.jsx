@@ -21,6 +21,7 @@ import {
   ExternalLink,
   GitBranch,
   Loader2,
+  Pin,
   Save,
   X,
 } from 'lucide-react';
@@ -55,6 +56,43 @@ function detectPrismLanguage(filePath = '') {
   return 'clike';
 }
 
+const SNIPPET_MIN_CHARS = 10;
+const SNIPPET_MAX_AUTO_CHARS = 1200;
+
+function isMeaningfulSnippet(snippet = '') {
+  const normalized = String(snippet || '').trim();
+  if (!normalized) return false;
+  if (normalized.length < SNIPPET_MIN_CHARS) return false;
+
+  const withoutComments = normalized
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|\n)\s*\/\/.*$/gm, '')
+    .trim();
+
+  if (!withoutComments) return false;
+  if (/^[{}()[\];,\s]+$/.test(withoutComments)) return false;
+
+  return true;
+}
+
+function normalizeConfidenceScore(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.max(0, Math.min(1, value));
+  }
+
+  const parsed = Number.parseFloat(String(value || '').replace('%', '').trim());
+  if (Number.isNaN(parsed)) return null;
+  const score = parsed > 1 ? parsed / 100 : parsed;
+  return Math.max(0, Math.min(1, score));
+}
+
+function confidenceTone(score) {
+  if (typeof score !== 'number') return 'text-muted-foreground';
+  if (score >= 0.85) return 'text-emerald-600';
+  if (score >= 0.65) return 'text-amber-600';
+  return 'text-rose-600';
+}
+
 export default function AnalyzeFilePage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -72,10 +110,19 @@ export default function AnalyzeFilePage() {
   const [snippetState, setSnippetState] = useState({
     status: 'idle',
     error: '',
+    notice: '',
     selectedSnippet: '',
     lineStart: null,
     lineEnd: null,
     data: null,
+  });
+  const [isSnippetDrawerOpen, setIsSnippetDrawerOpen] = useState(false);
+  const [isMobileSnippetSheetOpen, setIsMobileSnippetSheetOpen] = useState(false);
+  const [isSnippetPopoverPinned, setIsSnippetPopoverPinned] = useState(false);
+  const [snippetPopoverAnchor, setSnippetPopoverAnchor] = useState({
+    x: 0,
+    y: 0,
+    visible: false,
   });
 
   const editorGutterRef = useRef(null);
@@ -84,6 +131,7 @@ export default function AnalyzeFilePage() {
   const viewerCodeRef = useRef(null);
   const snippetAbortRef = useRef(null);
   const snippetDebounceRef = useRef(null);
+  const snippetPanelRef = useRef(null);
 
   const routeDirectory = useMemo(() => {
     const raw = params.dir_name ? decodeURIComponent(params.dir_name) : '';
@@ -131,11 +179,13 @@ export default function AnalyzeFilePage() {
     setSnippetState({
       status: 'idle',
       error: '',
+      notice: '',
       selectedSnippet: '',
       lineStart: null,
       lineEnd: null,
       data: null,
     });
+    setSnippetPopoverAnchor((prev) => ({ ...prev, visible: false }));
   }, [fileState.data?.content, fileState.data?.path]);
 
   useEffect(() => {
@@ -214,14 +264,83 @@ export default function AnalyzeFilePage() {
 
   const hasNodeInsights = Boolean(selectedFilePath && aiGraph?.[selectedFilePath]);
 
+  const snippetConfidenceScore = useMemo(() => {
+    return normalizeConfidenceScore(snippetState.data?.confidenceScore);
+  }, [snippetState.data?.confidenceScore]);
+
+  const quickSnippetSummary = useMemo(() => {
+    if (!snippetState.data?.whatItDoes) return '';
+    const raw = String(snippetState.data.whatItDoes).replace(/\s+/g, ' ').trim();
+    if (raw.length <= 140) return raw;
+    return `${raw.slice(0, 137)}...`;
+  }, [snippetState.data?.whatItDoes]);
+
+  const snippetStatusMeta = useMemo(() => {
+    if (snippetState.status === 'loading') {
+      return {
+        label: 'Analyzing',
+        dotClass: 'bg-amber-500 animate-pulse',
+      };
+    }
+
+    if (snippetState.status === 'succeeded') {
+      return {
+        label: 'Ready',
+        dotClass: 'bg-emerald-500',
+      };
+    }
+
+    if (snippetState.status === 'failed') {
+      return {
+        label: 'Error',
+        dotClass: 'bg-rose-500',
+      };
+    }
+
+    return {
+      label: 'Idle',
+      dotClass: 'bg-slate-400',
+    };
+  }, [snippetState.status]);
+
   const getLineNumberFromOffset = (value, offset) => {
     const safeOffset = Math.max(0, Math.min(String(value || '').length, offset));
     const upToOffset = String(value || '').slice(0, safeOffset);
     return upToOffset.split('\n').length;
   };
 
-  const triggerSnippetAnalysis = ({ snippet, lineStart, lineEnd, shouldAnalyze = true }) => {
+  const openSnippetDrawer = () => {
+    setIsSnippetDrawerOpen(true);
+    if (window.matchMedia('(max-width: 1279px)').matches) {
+      setIsMobileSnippetSheetOpen(true);
+    }
+    window.setTimeout(() => {
+      snippetPanelRef.current?.focus();
+    }, 20);
+  };
+
+  const updateSnippetPopoverAnchor = ({ x, y, visible = true }) => {
+    setSnippetPopoverAnchor({
+      x: Number.isFinite(x) ? Math.max(16, x) : 16,
+      y: Number.isFinite(y) ? Math.max(16, y) : 16,
+      visible,
+    });
+  };
+
+  const triggerSnippetAnalysis = ({
+    snippet,
+    lineStart,
+    lineEnd,
+    shouldAnalyze = true,
+    triggerSource = 'auto',
+  }) => {
     const normalizedSnippet = String(snippet || '').trim();
+
+    const basePayload = {
+      selectedSnippet: normalizedSnippet,
+      lineStart: Number.isInteger(lineStart) ? lineStart : null,
+      lineEnd: Number.isInteger(lineEnd) ? lineEnd : null,
+    };
 
     if (!shouldAnalyze) {
       if (snippetDebounceRef.current) {
@@ -235,15 +354,13 @@ export default function AnalyzeFilePage() {
         ...prev,
         status: 'idle',
         error: '',
-        selectedSnippet: normalizedSnippet,
-        lineStart: Number.isInteger(lineStart) ? lineStart : null,
-        lineEnd: Number.isInteger(lineEnd) ? lineEnd : null,
-        data: null,
+        notice: normalizedSnippet ? 'Selection captured. Click Analyze Snippet to run.' : '',
+        ...basePayload,
       }));
       return;
     }
 
-    if (!normalizedSnippet || !analysisJobId || !selectedFilePath) {
+    if (!normalizedSnippet) {
       if (snippetAbortRef.current) {
         snippetAbortRef.current.abort();
       }
@@ -252,10 +369,42 @@ export default function AnalyzeFilePage() {
         ...prev,
         status: 'idle',
         error: '',
-        selectedSnippet: normalizedSnippet,
-        lineStart: Number.isInteger(lineStart) ? lineStart : null,
-        lineEnd: Number.isInteger(lineEnd) ? lineEnd : null,
+        notice: '',
+        ...basePayload,
         data: null,
+      }));
+      return;
+    }
+
+    if (!isMeaningfulSnippet(normalizedSnippet)) {
+      setSnippetState((prev) => ({
+        ...prev,
+        status: 'idle',
+        error: '',
+        notice: `Select at least ${SNIPPET_MIN_CHARS} meaningful characters for snippet analysis.`,
+        ...basePayload,
+      }));
+      return;
+    }
+
+    if (triggerSource === 'auto' && normalizedSnippet.length > SNIPPET_MAX_AUTO_CHARS) {
+      setSnippetState((prev) => ({
+        ...prev,
+        status: 'idle',
+        error: '',
+        notice: 'Large selection detected. Use Analyze Snippet for a manual run.',
+        ...basePayload,
+      }));
+      return;
+    }
+
+    if (!analysisJobId || !selectedFilePath) {
+      setSnippetState((prev) => ({
+        ...prev,
+        status: 'failed',
+        error: 'Analysis context is not ready yet. Load repository graph data and try again.',
+        notice: '',
+        ...basePayload,
       }));
       return;
     }
@@ -276,9 +425,8 @@ export default function AnalyzeFilePage() {
         ...prev,
         status: 'loading',
         error: '',
-        selectedSnippet: normalizedSnippet,
-        lineStart: Number.isInteger(lineStart) ? lineStart : null,
-        lineEnd: Number.isInteger(lineEnd) ? lineEnd : null,
+        notice: '',
+        ...basePayload,
       }));
 
       try {
@@ -296,11 +444,13 @@ export default function AnalyzeFilePage() {
         setSnippetState({
           status: 'succeeded',
           error: '',
-          selectedSnippet: normalizedSnippet,
-          lineStart: Number.isInteger(lineStart) ? lineStart : null,
-          lineEnd: Number.isInteger(lineEnd) ? lineEnd : null,
+          notice: '',
+          ...basePayload,
           data: result,
         });
+        if (!isSnippetPopoverPinned) {
+          setSnippetPopoverAnchor((prev) => ({ ...prev, visible: true }));
+        }
       } catch (error) {
         if (controller.signal.aborted || error?.name === 'CanceledError' || error?.name === 'AbortError') {
           return;
@@ -313,7 +463,7 @@ export default function AnalyzeFilePage() {
             error?.response?.data?.error ||
             error?.message ||
             'Failed to analyze selected snippet.',
-          data: null,
+          notice: '',
         }));
       }
     }, 450);
@@ -327,6 +477,9 @@ export default function AnalyzeFilePage() {
 
     if (!value || end <= start) {
       triggerSnippetAnalysis({ snippet: '', lineStart: null, lineEnd: null, shouldAnalyze: false });
+      if (!isSnippetPopoverPinned) {
+        setSnippetPopoverAnchor((prev) => ({ ...prev, visible: false }));
+      }
       return;
     }
 
@@ -334,11 +487,21 @@ export default function AnalyzeFilePage() {
     const lineStart = getLineNumberFromOffset(value, start);
     const lineEnd = getLineNumberFromOffset(value, end);
 
+    const targetRect = target?.getBoundingClientRect?.();
+    const clientX = event?.nativeEvent?.clientX;
+    const clientY = event?.nativeEvent?.clientY;
+    updateSnippetPopoverAnchor({
+      x: Number.isFinite(clientX) ? clientX + 12 : (targetRect?.right || 300) - 24,
+      y: Number.isFinite(clientY) ? clientY - 12 : (targetRect?.top || 80) + 18,
+      visible: true,
+    });
+
     triggerSnippetAnalysis({
       snippet: selectedSnippet,
       lineStart,
       lineEnd,
       shouldAnalyze: isAutoSnippetAnalyze,
+      triggerSource: isAutoSnippetAnalyze ? 'auto' : 'manual-ready',
     });
   };
 
@@ -377,18 +540,28 @@ export default function AnalyzeFilePage() {
 
     if (!rangeOffsets || rangeOffsets.end <= rangeOffsets.start) {
       triggerSnippetAnalysis({ snippet: '', lineStart: null, lineEnd: null, shouldAnalyze: false });
+      if (!isSnippetPopoverPinned) {
+        setSnippetPopoverAnchor((prev) => ({ ...prev, visible: false }));
+      }
       return;
     }
 
     const selectedSnippet = rawContent.slice(rangeOffsets.start, rangeOffsets.end).trim();
     const lineStart = getLineNumberFromOffset(rawContent, rangeOffsets.start);
     const lineEnd = getLineNumberFromOffset(rawContent, rangeOffsets.end);
+    const rangeRect = range.getBoundingClientRect();
+    updateSnippetPopoverAnchor({
+      x: (rangeRect?.right || 300) + 10,
+      y: rangeRect?.top || 80,
+      visible: true,
+    });
 
     triggerSnippetAnalysis({
       snippet: selectedSnippet,
       lineStart,
       lineEnd,
       shouldAnalyze: isAutoSnippetAnalyze,
+      triggerSource: isAutoSnippetAnalyze ? 'auto' : 'manual-ready',
     });
   };
 
@@ -400,8 +573,125 @@ export default function AnalyzeFilePage() {
       lineStart: snippetState.lineStart,
       lineEnd: snippetState.lineEnd,
       shouldAnalyze: true,
+      triggerSource: 'manual',
     });
+    openSnippetDrawer();
   };
+
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+        if (!snippetState.selectedSnippet) return;
+        event.preventDefault();
+        handleManualSnippetAnalyze();
+        return;
+      }
+
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && String(event.key || '').toLowerCase() === 'i') {
+        event.preventDefault();
+        openSnippetDrawer();
+        return;
+      }
+
+      if (event.key === 'Escape' && !isSnippetPopoverPinned) {
+        setSnippetPopoverAnchor((prev) => ({ ...prev, visible: false }));
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isSnippetPopoverPinned, snippetState.selectedSnippet]);
+
+  const showSnippetPopover =
+    snippetPopoverAnchor.visible &&
+    Boolean(snippetState.selectedSnippet) &&
+    !isMobileSnippetSheetOpen;
+
+  const renderSnippetImpactDetails = ({ compact = false } = {}) => (
+    <div className={compact ? 'space-y-2 text-[11px]' : 'space-y-3 text-xs'}>
+      {snippetState.data?.whatItDoes && (
+        <div>
+          <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60">
+            What It Does
+          </p>
+          <p className="text-foreground/90 whitespace-pre-wrap leading-relaxed">
+            {snippetState.data.whatItDoes}
+          </p>
+        </div>
+      )}
+
+      {snippetState.data?.fileImpact && !compact && (
+        <div>
+          <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60">
+            File Impact
+          </p>
+          <p className="text-foreground/90 whitespace-pre-wrap leading-relaxed">
+            {snippetState.data.fileImpact}
+          </p>
+        </div>
+      )}
+
+      {snippetState.data?.codebaseImpact && !compact && (
+        <div>
+          <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60">
+            Codebase Impact
+          </p>
+          <p className="text-foreground/90 whitespace-pre-wrap leading-relaxed">
+            {snippetState.data.codebaseImpact}
+          </p>
+        </div>
+      )}
+
+      {(typeof snippetConfidenceScore === 'number' || snippetState.data?.confidence) && (
+        <div className="rounded-lg border border-border/60 bg-background/70 px-2 py-2 text-[11px]">
+          <span className="text-muted-foreground">Confidence: </span>
+          <span className={confidenceTone(snippetConfidenceScore)}>
+            {snippetState.data?.confidence || 'unknown'}
+          </span>
+          {typeof snippetConfidenceScore === 'number' && (
+            <span className="text-muted-foreground"> ({snippetConfidenceScore.toFixed(2)})</span>
+          )}
+          {snippetState.data?.rerunTriggered && (
+            <span className="text-amber-600"> - Re-analyzed for low confidence</span>
+          )}
+        </div>
+      )}
+
+      {!compact &&
+        Array.isArray(snippetState.data?.directlyImpactedFiles) &&
+        snippetState.data.directlyImpactedFiles.length > 0 && (
+          <div>
+            <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60">
+              Directly Impacted Files ({snippetState.data.directlyImpactedFiles.length})
+            </p>
+            <ul className="space-y-1">
+              {snippetState.data.directlyImpactedFiles.slice(0, 8).map((file) => (
+                <li key={`direct-${file}`} className="font-mono text-foreground/90 break-all">
+                  {file}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+      {!compact &&
+        Array.isArray(snippetState.data?.transitivelyImpactedFiles) &&
+        snippetState.data.transitivelyImpactedFiles.length > 0 && (
+          <div>
+            <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60">
+              Transitively Impacted Files ({snippetState.data.transitivelyImpactedFiles.length})
+            </p>
+            <ul className="space-y-1">
+              {snippetState.data.transitivelyImpactedFiles.slice(0, 8).map((file) => (
+                <li key={`transitive-${file}`} className="font-mono text-foreground/90 break-all">
+                  {file}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+    </div>
+  );
 
   return (
     <section className="mx-auto w-full max-w-475 px-4 pb-10 pt-7 2xl:px-6">
@@ -447,15 +737,62 @@ export default function AnalyzeFilePage() {
       )}
 
       {selectedFilePath && (
-        <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1fr)_17.5rem] 2xl:grid-cols-[minmax(0,1fr)_18.5rem]">
+        <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(21rem,1fr)]">
           <div className="rounded-2xl shadow-neu-inset border-none bg-background/40">
           <div className="flex items-center justify-between gap-3 border-b border-border/10 px-5 py-4">
             <div className="min-w-0">
               <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60">File</p>
               <p className="truncate text-sm font-display font-bold tracking-tight">{selectedFilePath}</p>
+              <p className="mt-1 text-[11px] text-muted-foreground/80">
+                Select code to analyze. Ctrl/Cmd+Enter runs snippet analysis.
+              </p>
             </div>
 
             <div className="flex items-center gap-2">
+              <div className="hidden xl:flex items-center gap-2 rounded-xl border border-border/50 bg-background/55 p-1 shadow-neu-inset">
+                <div className="inline-flex items-center rounded-lg border border-border/60 bg-background/70 p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsAutoSnippetAnalyze(true)}
+                    className={`rounded-md px-2.5 py-1 text-[10px] font-semibold tracking-wide transition-colors ${
+                      isAutoSnippetAnalyze
+                        ? 'bg-primary/12 text-primary'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    Auto
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsAutoSnippetAnalyze(false)}
+                    className={`rounded-md px-2.5 py-1 text-[10px] font-semibold tracking-wide transition-colors ${
+                      !isAutoSnippetAnalyze
+                        ? 'bg-primary/12 text-primary'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    Manual
+                  </button>
+                </div>
+
+                <span className="inline-flex items-center gap-1.5 rounded-lg border border-border/60 bg-background/70 px-2 py-1 text-[10px] text-muted-foreground">
+                  <span className={`size-1.5 rounded-full ${snippetStatusMeta.dotClass}`} />
+                  {snippetStatusMeta.label}
+                </span>
+
+                {!isAutoSnippetAnalyze && (
+                  <Button
+                    size="sm"
+                    type="button"
+                    onClick={handleManualSnippetAnalyze}
+                    disabled={!snippetState.selectedSnippet || snippetState.status === 'loading'}
+                    className="h-7 rounded-lg bg-gold px-2.5 text-[10px] text-white"
+                  >
+                    {snippetState.status === 'loading' ? 'Analyzing...' : 'Analyze'}
+                  </Button>
+                )}
+              </div>
+
               {!isEditing ? (
                 <Button
                   size="sm"
@@ -572,154 +909,11 @@ export default function AnalyzeFilePage() {
                 <p className="mt-2 text-xs text-destructive">{fileState.saveError}</p>
               )}
 
-              <div className="mt-4 rounded-xl border border-border/50 bg-background/50 p-3">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60">
-                    Snippet Analysis
-                  </p>
-                  <div className="flex items-center gap-2">
-                    {snippetState.lineStart && snippetState.lineEnd && (
-                      <p className="text-[10px] text-muted-foreground">
-                        Lines {snippetState.lineStart}-{snippetState.lineEnd}
-                      </p>
-                    )}
-                    <Button
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                      onClick={() => setIsAutoSnippetAnalyze((prev) => !prev)}
-                      className="h-7 rounded-lg px-2 text-[10px] shadow-neu-inset border-none bg-background/60"
-                    >
-                      {isAutoSnippetAnalyze ? 'Auto Analyze: ON' : 'Auto Analyze: OFF'}
-                    </Button>
-                    {!isAutoSnippetAnalyze && (
-                      <Button
-                        size="sm"
-                        type="button"
-                        onClick={handleManualSnippetAnalyze}
-                        disabled={!snippetState.selectedSnippet || snippetState.status === 'loading'}
-                        className="h-7 rounded-lg px-2 text-[10px]"
-                      >
-                        {snippetState.status === 'loading' ? 'Analyzing...' : 'Analyze Snippet'}
-                      </Button>
-                    )}
-                  </div>
-                </div>
-
-                {!snippetState.selectedSnippet && (
-                  <p className="text-xs text-muted-foreground">
-                    Select a code snippet to analyze its purpose and impact across related files.
-                    {!isAutoSnippetAnalyze && ' Then click Analyze Snippet.'}
-                  </p>
-                )}
-
-                {snippetState.selectedSnippet && (
-                  <pre className="mb-3 max-h-44 overflow-auto rounded-lg border border-border/60 bg-background/80 px-2 py-2 font-mono text-[11px] leading-5 text-foreground/90 custom-scrollbar">
-                    {snippetState.selectedSnippet}
-                  </pre>
-                )}
-
-                {snippetState.status === 'loading' && (
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Loader2 className="size-3.5 animate-spin" />
-                    Analyzing snippet impact...
-                  </div>
-                )}
-
-                {snippetState.status === 'failed' && snippetState.error && (
-                  <div className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-2 py-2 text-xs text-destructive">
-                    <AlertTriangle className="mt-0.5 size-3.5" />
-                    <span>{snippetState.error}</span>
-                  </div>
-                )}
-
-                {snippetState.status === 'succeeded' && snippetState.data && (
-                  <div className="space-y-3 text-xs">
-                    {snippetState.data.whatItDoes && (
-                      <div>
-                        <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60">
-                          What It Does
-                        </p>
-                        <p className="text-foreground/90 whitespace-pre-wrap leading-relaxed">
-                          {snippetState.data.whatItDoes}
-                        </p>
-                      </div>
-                    )}
-
-                    {snippetState.data.fileImpact && (
-                      <div>
-                        <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60">
-                          File Impact
-                        </p>
-                        <p className="text-foreground/90 whitespace-pre-wrap leading-relaxed">
-                          {snippetState.data.fileImpact}
-                        </p>
-                      </div>
-                    )}
-
-                    {snippetState.data.codebaseImpact && (
-                      <div>
-                        <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60">
-                          Codebase Impact
-                        </p>
-                        <p className="text-foreground/90 whitespace-pre-wrap leading-relaxed">
-                          {snippetState.data.codebaseImpact}
-                        </p>
-                      </div>
-                    )}
-
-                    <div className="rounded-lg border border-border/60 bg-background/70 px-2 py-2 text-[11px] text-muted-foreground">
-                      Confidence: {snippetState.data.confidence || 'unknown'}
-                      {typeof snippetState.data.confidenceScore === 'number' && (
-                        <span>
-                          {' '}
-                          ({snippetState.data.confidenceScore.toFixed(2)})
-                        </span>
-                      )}
-                      {snippetState.data.rerunTriggered && (
-                        <span> · Re-run triggered due to low confidence</span>
-                      )}
-                    </div>
-
-                    {Array.isArray(snippetState.data.directlyImpactedFiles) &&
-                      snippetState.data.directlyImpactedFiles.length > 0 && (
-                        <div>
-                          <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60">
-                            Directly Impacted Files ({snippetState.data.directlyImpactedFiles.length})
-                          </p>
-                          <ul className="space-y-1">
-                            {snippetState.data.directlyImpactedFiles.map((file) => (
-                              <li key={`direct-${file}`} className="font-mono text-foreground/90 break-all">
-                                {file}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-
-                    {Array.isArray(snippetState.data.transitivelyImpactedFiles) &&
-                      snippetState.data.transitivelyImpactedFiles.length > 0 && (
-                        <div>
-                          <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60">
-                            Transitively Impacted Files ({snippetState.data.transitivelyImpactedFiles.length})
-                          </p>
-                          <ul className="space-y-1">
-                            {snippetState.data.transitivelyImpactedFiles.map((file) => (
-                              <li key={`transitive-${file}`} className="font-mono text-foreground/90 break-all">
-                                {file}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                  </div>
-                )}
-              </div>
             </div>
           )}
           </div>
 
-          <div className="relative min-h-104 xl:justify-self-end xl:w-full">
+          <div className="relative min-h-104 xl:justify-self-end xl:w-full xl:max-w-120">
             {hasNodeInsights ? (
               <AiPanel
                 nodeId={selectedFilePath}
@@ -732,6 +926,217 @@ export default function AnalyzeFilePage() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {isSnippetDrawerOpen && (
+        <div className="fixed right-4 top-24 z-40 hidden w-104 max-w-[calc(100vw-2rem)] xl:block animate-in fade-in slide-in-from-right-2 duration-200">
+          <div
+            ref={snippetPanelRef}
+            tabIndex={-1}
+            className="rounded-2xl border border-border/70 bg-background/95 p-4 shadow-2xl backdrop-blur-sm outline-none animate-in zoom-in-95 duration-200"
+          >
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60">
+                  Snippet Impact
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {snippetState.lineStart && snippetState.lineEnd
+                    ? `Lines ${snippetState.lineStart}-${snippetState.lineEnd}`
+                    : 'Select a snippet to inspect impact'}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsSnippetPopoverPinned((prev) => !prev)}
+                  className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[10px] transition-colors ${
+                    isSnippetPopoverPinned
+                      ? 'border-primary/40 bg-primary/10 text-primary'
+                      : 'border-border/60 bg-background/70 text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Pin className="size-3" />
+                  {isSnippetPopoverPinned ? 'Pinned' : 'Pin'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsSnippetDrawerOpen(false)}
+                  className="inline-flex items-center rounded-lg border border-border/60 bg-background/70 px-2 py-1 text-[10px] text-muted-foreground hover:text-foreground"
+                >
+                  <X className="size-3" />
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-3 max-h-[70vh] overflow-auto pr-1 custom-scrollbar">
+              {snippetState.selectedSnippet ? (
+                <pre className="max-h-32 overflow-auto rounded-lg border border-border/60 bg-background/80 px-2 py-2 font-mono text-[11px] leading-5 text-foreground/90 custom-scrollbar">
+                  {snippetState.selectedSnippet}
+                </pre>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Select a meaningful snippet to view purpose and impact insights.
+                </p>
+              )}
+
+              {snippetState.notice && (
+                <p className="rounded-lg border border-border/60 bg-background/70 px-2 py-2 text-xs text-muted-foreground">
+                  {snippetState.notice}
+                </p>
+              )}
+
+              {snippetState.status === 'loading' && (
+                <div className="rounded-lg border border-border/60 bg-background/70 px-2 py-2 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="size-3.5 animate-spin" />
+                    {snippetState.data ? 'Updating analysis...' : 'Analyzing snippet impact...'}
+                  </div>
+                </div>
+              )}
+
+              {snippetState.status === 'failed' && snippetState.error && (
+                <div className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-2 py-2 text-xs text-destructive">
+                  <AlertTriangle className="mt-0.5 size-3.5" />
+                  <span>{snippetState.error}</span>
+                </div>
+              )}
+
+              {snippetState.data && renderSnippetImpactDetails()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showSnippetPopover && (
+        <div
+          className="pointer-events-none fixed z-50 hidden w-88 max-w-[calc(100vw-2rem)] origin-top-left xl:block animate-in fade-in zoom-in-95 slide-in-from-top-1 duration-200"
+          style={{
+            left: `${snippetPopoverAnchor.x}px`,
+            top: `${snippetPopoverAnchor.y}px`,
+          }}
+        >
+          <div className="pointer-events-auto rounded-2xl border border-border/70 bg-background/95 p-3 shadow-2xl backdrop-blur-sm">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60">
+                Snippet Insight
+              </p>
+              <div className="flex items-center gap-1.5">
+                <span className="rounded-md border border-border/60 bg-background/70 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                  {isAutoSnippetAnalyze ? 'Auto Analysis' : 'Manual Analysis'}
+                </span>
+                <span className="rounded-md border border-primary/25 bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
+                  Analysis
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSnippetPopoverAnchor((prev) => ({ ...prev, visible: false }))}
+                className="rounded-md border border-border/60 px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+              >
+                Close
+              </button>
+            </div>
+
+            {snippetState.status === 'loading' && (
+              <div className="mb-2 inline-flex items-center gap-2 text-xs text-muted-foreground">
+                <Loader2 className="size-3.5 animate-spin" />
+                {snippetState.data ? 'Updating analysis...' : 'Analyzing...'}
+              </div>
+            )}
+
+            {quickSnippetSummary ? (
+              <p className="text-xs leading-relaxed text-foreground/90">{quickSnippetSummary}</p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                {snippetState.notice || 'Selection captured. Run analysis for impact details.'}
+              </p>
+            )}
+
+            {snippetState.data && (
+              <div className="mt-2">{renderSnippetImpactDetails({ compact: true })}</div>
+            )}
+
+            <div className="mt-3 flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={openSnippetDrawer}
+                className="rounded-lg border border-border/60 bg-background/70 px-2.5 py-1 text-[10px] text-muted-foreground hover:text-foreground"
+              >
+                Open Full Impact
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsSnippetPopoverPinned((prev) => !prev)}
+                className={`rounded-lg border px-2.5 py-1 text-[10px] ${
+                  isSnippetPopoverPinned
+                    ? 'border-primary/40 bg-primary/10 text-primary'
+                    : 'border-border/60 bg-background/70 text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {isSnippetPopoverPinned ? 'Unpin' : 'Pin'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="fixed bottom-4 right-4 z-40 xl:hidden">
+        <Button
+          type="button"
+          onClick={() => setIsMobileSnippetSheetOpen((prev) => !prev)}
+          className="rounded-xl bg-background/95 px-3 text-xs text-foreground shadow-xl"
+          variant="outline"
+        >
+          {isMobileSnippetSheetOpen ? 'Hide Snippet Impact' : 'Snippet Impact'}
+        </Button>
+      </div>
+
+      {isMobileSnippetSheetOpen && (
+        <div className="fixed inset-x-3 bottom-16 z-40 rounded-2xl border border-border/70 bg-background/95 p-3 shadow-2xl xl:hidden">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60">
+              Snippet Impact
+            </p>
+            <button
+              type="button"
+              onClick={() => setIsMobileSnippetSheetOpen(false)}
+              className="rounded-md border border-border/60 px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+            >
+              Close
+            </button>
+          </div>
+
+          {snippetState.selectedSnippet ? (
+            <pre className="mb-2 max-h-24 overflow-auto rounded-lg border border-border/60 bg-background/80 px-2 py-2 font-mono text-[10px] leading-4 text-foreground/90 custom-scrollbar">
+              {snippetState.selectedSnippet}
+            </pre>
+          ) : (
+            <p className="text-xs text-muted-foreground">Select a snippet to open impact details.</p>
+          )}
+
+          {snippetState.notice && (
+            <p className="mb-2 rounded-lg border border-border/60 bg-background/70 px-2 py-2 text-xs text-muted-foreground">
+              {snippetState.notice}
+            </p>
+          )}
+
+          {snippetState.status === 'loading' && (
+            <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="size-3.5 animate-spin" />
+              {snippetState.data ? 'Updating analysis...' : 'Analyzing snippet impact...'}
+            </div>
+          )}
+
+          {snippetState.status === 'failed' && snippetState.error && (
+            <div className="mb-2 flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-2 py-2 text-xs text-destructive">
+              <AlertTriangle className="mt-0.5 size-3.5" />
+              <span>{snippetState.error}</span>
+            </div>
+          )}
+
+          {snippetState.data && renderSnippetImpactDetails({ compact: true })}
         </div>
       )}
     </section>
