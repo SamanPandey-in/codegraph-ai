@@ -47,6 +47,7 @@ import {
   selectDashboardSummary,
 } from '../index';
 import { analyzeCodebase } from '@/features/graph/slices/graphSlice';
+import { setSelectedAnalyzeRepository } from '@/features/analyze';
 
 const QUICK_ACTIONS = [
   {
@@ -326,6 +327,34 @@ export default function DashboardPage() {
     };
   };
 
+  const buildAnalyzeRepositoryFromRepo = (repo) => {
+    if (!repo) return null;
+
+    if (repo.source === 'local') {
+      return {
+        source: 'local',
+        localPath: repo.fullName,
+      };
+    }
+
+    return {
+      source: 'github',
+      mode:
+        repo.githubMode ||
+        (repo.sourceCategory === 'github-public' ? 'public' : 'owned'),
+      owner: repo.owner,
+      repo: repo.name,
+      branch: repo.branch || 'main',
+      fullName: repo.fullName || `${repo.owner}/${repo.name}`,
+    };
+  };
+
+  const handleSelectAnalyzeRepository = (repo) => {
+    const selectedRepo = buildAnalyzeRepositoryFromRepo(repo);
+    if (!selectedRepo) return;
+    dispatch(setSelectedAnalyzeRepository(selectedRepo));
+  };
+
   const toggleJobs = (repoId) => {
     setExpandedRepos((prev) => {
       const next = { ...prev, [repoId]: !prev[repoId] };
@@ -386,6 +415,8 @@ export default function DashboardPage() {
               branch: repo.branch || 'main',
             },
           };
+
+      handleSelectAnalyzeRepository(repo);
 
     dispatch(analyzeCodebase(config));
     navigate('/graph');
@@ -611,6 +642,7 @@ export default function DashboardPage() {
                             <Link
                               to={graphLink.to}
                               state={graphLink.state}
+                              onClick={() => handleSelectAnalyzeRepository(repo)}
                               className="text-left text-base font-display font-bold text-foreground hover:text-gold transition-colors cursor-pointer tracking-tight"
                             >
                               {repo.fullName || `${repo.owner}/${repo.name}`}
@@ -710,7 +742,13 @@ export default function DashboardPage() {
 
                         {graphLink ? (
                           <Button size="sm" variant="outline" asChild>
-                            <Link to={graphLink.to} state={graphLink.state}>Open graph</Link>
+                            <Link
+                              to={graphLink.to}
+                              state={graphLink.state}
+                              onClick={() => handleSelectAnalyzeRepository(repo)}
+                            >
+                              Open graph
+                            </Link>
                           </Button>
                         ) : null}
                       </div>
@@ -755,7 +793,13 @@ export default function DashboardPage() {
 
                                     {jobGraphLink ? (
                                       <Button size="sm" variant="outline" asChild>
-                                        <Link to={jobGraphLink.to} state={jobGraphLink.state}>Open graph</Link>
+                                        <Link
+                                          to={jobGraphLink.to}
+                                          state={jobGraphLink.state}
+                                          onClick={() => handleSelectAnalyzeRepository(repo)}
+                                        >
+                                          Open graph
+                                        </Link>
                                       </Button>
                                     ) : (
                                       <Button type="button" size="sm" variant="outline" disabled>

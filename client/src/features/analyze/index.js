@@ -1,4 +1,5 @@
 export { default as AnalyzePage } from './pages/AnalyzePage';
+export { default as AnalyzeFilePage } from './pages/AnalyzeFilePage';
 
 export {
 	fetchRepositoryFile,

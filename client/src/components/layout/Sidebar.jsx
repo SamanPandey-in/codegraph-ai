@@ -8,6 +8,7 @@ import {
   ChevronLeft,
   ChevronRight,
   UploadIcon,
+  GitGraphIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -24,12 +25,12 @@ const NAV_ITEMS = [
   },
   {
     to: '/analyze',
-    icon: <Network className="size-4 shrink-0" />,
+    icon: <GitGraphIcon className="size-4 shrink-0" />,
     label: 'Analyze',
   },
   {
     to: '/graph',
-    icon: <Share2 className="size-4 shrink-0" />,
+    icon: <Network className="size-4 shrink-0" />,
     label: 'Graph',
   },
 ];

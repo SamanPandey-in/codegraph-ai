@@ -11,7 +11,7 @@ import Layout from '@/components/layout/Layout';
 import { LandingPage, LoginPage, SignupPage } from '@/features/auth';
 import { DashboardPage }                      from '@/features/dashboard';
 import { UploadRepoPage, GraphPage }             from '@/features/graph';
-import { AnalyzePage }             from '@/features/analyze';
+import { AnalyzeFilePage, AnalyzePage }             from '@/features/analyze';
 
 function RootRedirect() {
   const { isAuthenticated, loading } = useAuth();
@@ -43,6 +43,7 @@ function AppRoutes() {
           <Route path="/upload-repo" element={<UploadRepoPage />} />
           <Route path="/analyze" element={<AnalyzePage />} />
           <Route path="/analyze/:dir_name" element={<AnalyzePage />} />
+          <Route path="/analyze/:dir_name/file" element={<AnalyzeFilePage />} />
           <Route path="/graph" element={<GraphPage />} />
         </Route>
       </Route>
