@@ -81,6 +81,9 @@ async function resolveDatabaseUserId(authUser) {
   return upserted.rows[0]?.id || null;
 }
 
+// TODO: Enforce allowedPlans when paid tiers are introduced.
+// Currently every authenticated user is treated as 'free' regardless
+// of the plan list passed to this middleware.
 export function requirePlan(..._allowedPlans) {
   return async (req, res, next) => {
     try {

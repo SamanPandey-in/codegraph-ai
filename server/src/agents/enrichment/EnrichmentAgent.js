@@ -1,13 +1,13 @@
 import crypto from 'crypto';
 import path from 'path';
 import { readFile } from 'fs/promises';
-import OpenAI from 'openai';
 import pLimit from 'p-limit';
 import { BaseAgent } from '../core/BaseAgent.js';
 import { scoreEnrichment } from '../core/confidence.js';
 import { redisClient } from '../../infrastructure/connections.js';
+import { createChatClient } from '../../services/ai/llmProvider.js';
 
-const DEFAULT_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+const DEFAULT_MODEL = process.env.AI_MODEL || process.env.OPENAI_MODEL || 'gpt-4o-mini';
 const FILE_LINE_THRESHOLD = Number(process.env.ENRICHMENT_FILE_LINE_THRESHOLD || 50);
 const CACHE_TTL_SECONDS = Number(process.env.AI_CACHE_TTL_SECONDS || 3600);
 const ENRICHMENT_CONCURRENCY = Number(process.env.ENRICHMENT_CONCURRENCY || 4);
@@ -80,14 +80,10 @@ export class EnrichmentAgent extends BaseAgent {
   maxRetries = 2;
   timeoutMs = 240_000;
 
-  constructor({ redis, openaiClient } = {}) {
+  constructor({ redis, llmClient } = {}) {
     super();
     this.redis = redis || redisClient;
-    this.openai =
-      openaiClient ||
-      (process.env.OPENAI_API_KEY
-        ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-        : null);
+    this.llmClient = llmClient || createChatClient();
     this.model = DEFAULT_MODEL;
     this.lineThreshold = Number.isFinite(FILE_LINE_THRESHOLD) ? FILE_LINE_THRESHOLD : 50;
     this.cacheTtlSeconds = Number.isFinite(CACHE_TTL_SECONDS) ? CACHE_TTL_SECONDS : 3600;
@@ -115,8 +111,8 @@ export class EnrichmentAgent extends BaseAgent {
       });
     }
 
-    if (!this.openai) {
-      warnings.push('OPENAI_API_KEY is missing. Falling back to heuristic summaries only.');
+    if (!this.llmClient.isConfigured()) {
+      warnings.push('AI provider is not configured. Falling back to heuristic summaries only.');
     }
 
     const enriched = {};
@@ -147,7 +143,7 @@ export class EnrichmentAgent extends BaseAgent {
             return;
           }
 
-          if (!this.openai) {
+          if (!this.llmClient.isConfigured()) {
             enriched[filePath] = {
               summary: cheapSummary(filePath, node),
               architecturalRole: node?.type || 'module',
@@ -188,18 +184,18 @@ export class EnrichmentAgent extends BaseAgent {
 
           try {
             const prompt = buildPrompt({ filePath, node, content });
-            const completion = await this.openai.chat.completions.create({
+            const completion = await this.llmClient.createChatCompletion({
               model: this.model,
               temperature: 0.1,
-              max_tokens: 220,
-              response_format: { type: 'json_object' },
+              maxTokens: 220,
+              responseFormat: { type: 'json_object' },
               messages: [{ role: 'user', content: prompt }],
             });
 
-            const message = completion?.choices?.[0]?.message?.content || '{}';
+            const message = completion?.content || '{}';
             const usage = completion?.usage || {};
-            totalPromptTokens += Number(usage.prompt_tokens || 0);
-            totalCompletionTokens += Number(usage.completion_tokens || 0);
+            totalPromptTokens += Number(usage.prompt_tokens || usage.input_tokens || 0);
+            totalCompletionTokens += Number(usage.completion_tokens || usage.output_tokens || 0);
 
             let parsed;
             try {

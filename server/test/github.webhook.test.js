@@ -3,8 +3,7 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import express from 'express';
 import request from 'supertest';
-import githubWebhookRouter from '../src/api/webhooks/github.webhook.js';
-import * as Queue from 'bullmq';
+import { createGitHubWebhookRouter } from '../src/api/webhooks/github.webhook.js';
 
 // Mock dependencies
 const mockEnqueueAnalysisJob = async ({ jobId, input }) => {
@@ -57,8 +56,13 @@ describe('GitHub Webhook Integration', () => {
     app.use('/api/webhooks/github', express.raw({ type: 'application/json' }));
     app.use(express.json());
 
-    // Mock the module dependencies by patching the router's dependencies
-    app.use('/api/webhooks', githubWebhookRouter);
+    app.use(
+      '/api/webhooks',
+      createGitHubWebhookRouter({
+        db: mockPgPool,
+        enqueueJob: mockEnqueueAnalysisJob,
+      }),
+    );
   });
 
   it('accepts valid pull_request webhook with correct signature', async () => {
@@ -78,7 +82,7 @@ describe('GitHub Webhook Integration', () => {
     const response = await request(app)
       .post('/api/webhooks/github')
       .set('x-github-event', 'pull_request')
-      .set('x-hub-signature-256', signature)
+      .set('x-github-signature-256', signature)
       .set('Content-Type', 'application/json')
       .send(body);
 
@@ -103,7 +107,7 @@ describe('GitHub Webhook Integration', () => {
     const response = await request(app)
       .post('/api/webhooks/github')
       .set('x-github-event', 'pull_request')
-      .set('x-hub-signature-256', invalidSignature)
+      .set('x-github-signature-256', invalidSignature)
       .set('Content-Type', 'application/json')
       .send(body);
 
@@ -130,7 +134,7 @@ describe('GitHub Webhook Integration', () => {
     const response = await request(app)
       .post('/api/webhooks/github')
       .set('x-github-event', 'pull_request')
-      .set('x-hub-signature-256', signature)
+      .set('x-github-signature-256', signature)
       .set('Content-Type', 'application/json')
       .send(body);
 
@@ -150,7 +154,7 @@ describe('GitHub Webhook Integration', () => {
     const response = await request(app)
       .post('/api/webhooks/github')
       .set('x-github-event', 'push')
-      .set('x-hub-signature-256', signature)
+      .set('x-github-signature-256', signature)
       .set('Content-Type', 'application/json')
       .send(body);
 
@@ -175,7 +179,7 @@ describe('GitHub Webhook Integration', () => {
     const response = await request(app)
       .post('/api/webhooks/github')
       .set('x-github-event', 'pull_request')
-      .set('x-hub-signature-256', signature)
+      .set('x-github-signature-256', signature)
       .set('Content-Type', 'application/json')
       .send(body);
 
@@ -193,7 +197,7 @@ describe('GitHub Webhook Integration', () => {
     const response = await request(app)
       .post('/api/webhooks/github')
       .set('x-github-event', 'pull_request')
-      .set('x-hub-signature-256', signature)
+      .set('x-github-signature-256', signature)
       .set('Content-Type', 'application/json')
       .send(invalidBody);
 
@@ -217,7 +221,7 @@ describe('GitHub Webhook Integration', () => {
     const response = await request(app)
       .post('/api/webhooks/github')
       .set('x-github-event', 'pull_request')
-      .set('x-hub-signature-256', signature)
+      .set('x-github-signature-256', signature)
       .set('Content-Type', 'application/json')
       .send(body);
 
@@ -242,7 +246,7 @@ describe('GitHub Webhook Integration', () => {
     const response = await request(app)
       .post('/api/webhooks/github')
       .set('x-github-event', 'pull_request')
-      .set('x-hub-signature-256', signature)
+      .set('x-github-signature-256', signature)
       .set('Content-Type', 'application/json')
       .send(body);
 
@@ -267,7 +271,7 @@ describe('GitHub Webhook Integration', () => {
     const response = await request(app)
       .post('/api/webhooks/github')
       .set('x-github-event', 'pull_request')
-      .set('x-hub-signature-256', signature)
+      .set('x-github-signature-256', signature)
       .set('Content-Type', 'application/json')
       .send(body);
 
@@ -294,7 +298,7 @@ describe('GitHub Webhook Integration', () => {
     const response = await request(app)
       .post('/api/webhooks/github')
       .set('x-github-event', 'pull_request')
-      .set('x-hub-signature-256', shortSignature)
+      .set('x-github-signature-256', shortSignature)
       .set('Content-Type', 'application/json')
       .send(body);
 

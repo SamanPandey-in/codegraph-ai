@@ -30,7 +30,7 @@ describe('scoreParser', () => {
 describe('computeOverallConfidence', () => {
   it('applies parser weight and drags overall confidence down for low parser score', () => {
     const trace = [
-      { agentId: 'parser-agent', confidence: 0.3 },
+      { agentId: 'polyglot-parser-agent', confidence: 0.3 },
       { agentId: 'graph-builder-agent', confidence: 0.95 },
       { agentId: 'persistence-agent', confidence: 1.0 },
     ];

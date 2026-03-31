@@ -46,6 +46,7 @@ import {
   selectDashboardSummary,
 } from '../index';
 import { analyzeCodebase } from '@/features/graph/slices/graphSlice';
+import { setSelectedAnalyzeRepository } from '@/features/analyze';
 
 const QUICK_ACTIONS = [
   {
@@ -131,7 +132,7 @@ function MetricCard({ icon, title, value, helper, index = 0 }) {
     >
       <CardHeader className="pb-3">
         <div className="flex items-center gap-3 text-xs uppercase tracking-widest font-bold text-muted-foreground/70">
-          <div className="flex size-9 items-center justify-center rounded-xl bg-background shadow-sm border border-border/20">
+          <div className="flex size-9 items-center justify-center rounded-xl bg-background/50 shadow-neu-inset border-none">
             {icon}
           </div>
           <span>{title}</span>
@@ -325,6 +326,70 @@ export default function DashboardPage() {
     };
   };
 
+  const buildAnalyzeRepositoryFromRepo = (repo) => {
+    if (!repo) return null;
+
+    if (repo.source === 'local') {
+      return {
+        source: 'local',
+        localPath: repo.fullName,
+      };
+    }
+
+    return {
+      source: 'github',
+      mode:
+        repo.githubMode ||
+        (repo.sourceCategory === 'github-public' ? 'public' : 'owned'),
+      owner: repo.owner,
+      repo: repo.name,
+      branch: repo.branch || 'main',
+      fullName: repo.fullName || `${repo.owner}/${repo.name}`,
+      jobId: repo.jobId || null,
+      latestJobId: repo.latestJobId || null,
+    };
+  };
+
+  const handleSelectAnalyzeRepository = (repo) => {
+    const selectedRepo = buildAnalyzeRepositoryFromRepo(repo);
+    if (!selectedRepo) return;
+    dispatch(setSelectedAnalyzeRepository(selectedRepo));
+  };
+
+  const buildAnalyzeRepositoryFromJob = (repo, job) => {
+    const selectedRepo = buildAnalyzeRepositoryFromRepo(repo);
+    if (!selectedRepo) return null;
+
+    if (selectedRepo.source !== 'github') {
+      return selectedRepo;
+    }
+
+    return {
+      ...selectedRepo,
+      branch: job?.branch || selectedRepo.branch,
+      jobId: job?.id || selectedRepo.jobId || null,
+      latestJobId: job?.id || selectedRepo.latestJobId || null,
+    };
+  };
+
+  const handleOpenAnalyzePage = (repo, e) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    handleSelectAnalyzeRepository(repo);
+    navigate('/analyze');
+  };
+
+  const handleOpenAnalyzePageForJob = (repo, job, e) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+
+    const selectedRepo = buildAnalyzeRepositoryFromJob(repo, job);
+    if (!selectedRepo) return;
+
+    dispatch(setSelectedAnalyzeRepository(selectedRepo));
+    navigate('/analyze');
+  };
+
   const toggleJobs = (repoId) => {
     setExpandedRepos((prev) => {
       const next = { ...prev, [repoId]: !prev[repoId] };
@@ -386,6 +451,8 @@ export default function DashboardPage() {
             },
           };
 
+      handleSelectAnalyzeRepository(repo);
+
     dispatch(analyzeCodebase(config));
     navigate('/graph');
     setReanalyzingRepoId(null);
@@ -415,7 +482,7 @@ export default function DashboardPage() {
             >
               <CardHeader className="pb-4">
                 <div className="flex items-center gap-4">
-                  <div className="flex size-10 items-center justify-center rounded-xl bg-gold/10 shadow-sm border border-gold/20 group-hover:scale-110 transition-transform duration-300">
+                  <div className="flex size-10 items-center justify-center rounded-xl bg-gold/10 shadow-neu-inset border-none group-hover:scale-110 transition-transform duration-300">
                     {action.icon}
                   </div>
                   <CardTitle className="text-base font-display font-bold tracking-tight">{action.title}</CardTitle>
@@ -468,7 +535,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="mt-4">
-          <Card className="mb-4">
+          <Card className="mb-4 shadow-neu-inset border-none bg-background/40 rounded-2xl animate-in fade-in slide-in-from-bottom-2 duration-500 delay-300">
             <CardContent className="flex flex-col gap-3 py-4">
               <div className="grid gap-3 lg:grid-cols-3">
                 <div className="relative lg:col-span-1">
@@ -610,6 +677,7 @@ export default function DashboardPage() {
                             <Link
                               to={graphLink.to}
                               state={graphLink.state}
+                              onClick={() => handleSelectAnalyzeRepository(repo)}
                               className="text-left text-base font-display font-bold text-foreground hover:text-gold transition-colors cursor-pointer tracking-tight"
                             >
                               {repo.fullName || `${repo.owner}/${repo.name}`}
@@ -623,7 +691,7 @@ export default function DashboardPage() {
                             {repo.source} <span className="mx-1 opacity-30">|</span> {repo.branch || 'unknown'}
                           </p>
                         </div>
-                        <span className="rounded-xl border border-border/20 bg-background/50 px-3 py-1 text-[9px] font-black uppercase tracking-[0.15em] text-muted-foreground shadow-sm">
+                        <span className="rounded-xl border-none bg-background/50 px-3 py-1 text-[9px] font-black uppercase tracking-[0.15em] text-muted-foreground shadow-neu-inset">
                           {repo.status}
                         </span>
                       </div>
@@ -708,8 +776,25 @@ export default function DashboardPage() {
                         </Button>
 
                         {graphLink ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={(e) => handleOpenAnalyzePage(repo, e)}
+                          >
+                            Analyze Codebase
+                          </Button>
+                        ) : null}
+
+                        {graphLink ? (
                           <Button size="sm" variant="outline" asChild>
-                            <Link to={graphLink.to} state={graphLink.state}>Open graph</Link>
+                            <Link
+                              to={graphLink.to}
+                              state={graphLink.state}
+                              onClick={() => handleSelectAnalyzeRepository(repo)}
+                            >
+                              Open graph
+                            </Link>
                           </Button>
                         ) : null}
                       </div>
@@ -741,7 +826,7 @@ export default function DashboardPage() {
                                 return (
                                   <div
                                     key={job.id}
-                                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/20 bg-background/60 px-3 py-2"
+                                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl shadow-neu-inset border-none bg-background/60 px-4 py-3 transition-all duration-300 hover:bg-background/80"
                                   >
                                     <div className="flex min-w-0 flex-col gap-0.5 text-[11px] text-muted-foreground">
                                       <span className="font-semibold text-foreground/80">
@@ -753,9 +838,25 @@ export default function DashboardPage() {
                                     </div>
 
                                     {jobGraphLink ? (
-                                      <Button size="sm" variant="outline" asChild>
-                                        <Link to={jobGraphLink.to} state={jobGraphLink.state}>Open graph</Link>
-                                      </Button>
+                                      <div className="flex items-center gap-2">
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={(e) => handleOpenAnalyzePageForJob(repo, job, e)}
+                                        >
+                                          Analyze Codebase
+                                        </Button>
+                                        <Button size="sm" variant="outline" asChild>
+                                          <Link
+                                            to={jobGraphLink.to}
+                                            state={jobGraphLink.state}
+                                            onClick={() => handleSelectAnalyzeRepository(repo)}
+                                          >
+                                            Open graph
+                                          </Link>
+                                        </Button>
+                                      </div>
                                     ) : (
                                       <Button type="button" size="sm" variant="outline" disabled>
                                         Not restorable

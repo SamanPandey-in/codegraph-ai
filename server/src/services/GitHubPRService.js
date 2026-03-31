@@ -228,6 +228,41 @@ ${impactedList}
       throw new Error(`Failed to fetch PR metadata: ${err.message}`);
     }
   }
+
+  /**
+   * Create a check run for PR status
+   * @param {string} owner - Repository owner
+   * @param {string} repo - Repository name
+   * @param {string} sha - Commit SHA
+   * @param {Object} options - Check run options
+   * @param {string} options.conclusion - 'success' | 'failure' | 'neutral'
+   * @param {string} options.title - Check title
+   * @param {string} options.summary - Check summary
+   * @param {string} options.detailsUrl - URL to details
+   * @returns {Promise<{id: number, conclusion: string}>}
+   */
+  async createCheckRun(owner, repo, sha, { conclusion, title, summary, detailsUrl }) {
+    if (!this.isConfigured()) return;
+
+    try {
+      const response = await this.client.post(`/repos/${owner}/${repo}/check-runs`, {
+        name: 'CodeGraph Impact Analysis',
+        head_sha: sha,
+        status: 'completed',
+        conclusion,
+        details_url: detailsUrl,
+        output: { title, summary },
+      });
+
+      return {
+        id: response.data.id,
+        conclusion: response.data.conclusion,
+      };
+    } catch (err) {
+      console.error('Failed to create check run:', err.message);
+      return null;
+    }
+  }
 }
 
 export { GitHubPRService };

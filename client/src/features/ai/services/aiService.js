@@ -107,6 +107,52 @@ export const aiService = {
     return data;
   },
 
+  async analyzeSnippetImpact({ jobId, filePath, snippet, lineStart, lineEnd, signal }) {
+    const normalizedJobId = normalizeText(jobId);
+    const normalizedFilePath = normalizeText(filePath);
+    const normalizedSnippet = String(snippet || '').trim();
+
+    if (!normalizedJobId || !normalizedFilePath || !normalizedSnippet) {
+      throw new Error('analyzeSnippetImpact requires jobId, filePath, and snippet.');
+    }
+
+    const payload = {
+      jobId: normalizedJobId,
+      filePath: normalizedFilePath,
+      snippet: normalizedSnippet,
+    };
+
+    if (Number.isInteger(lineStart) && lineStart > 0) payload.lineStart = lineStart;
+    if (Number.isInteger(lineEnd) && lineEnd > 0) payload.lineEnd = lineEnd;
+
+    const { data } = await aiClient.post('/api/ai/snippet-impact', payload, {
+      signal,
+    });
+    return data;
+  },
+
+  async suggestRefactor({ jobId, filePath }) {
+    const normalizedJobId = normalizeText(jobId);
+    const normalizedFilePath = normalizeText(filePath);
+
+    if (!normalizedJobId || !normalizedFilePath) {
+      throw new Error('suggestRefactor requires jobId and filePath.');
+    }
+
+    const { data } = await aiClient.post('/api/ai/suggest-refactor', {
+      jobId: normalizedJobId,
+      filePath: normalizedFilePath,
+    });
+
+    return {
+      filePath: normalizeText(data?.filePath) || normalizedFilePath,
+      concerns: Array.isArray(data?.concerns) ? data.concerns : [],
+      suggestions: Array.isArray(data?.suggestions) ? data.suggestions : [],
+      priority: normalizeText(data?.priority) || 'medium',
+      estimatedEffort: normalizeText(data?.estimatedEffort) || 'unknown',
+    };
+  },
+
   async streamExplain({ question, jobId, onChunk, onDone, onError, signal } = {}) {
     const normalizedQuestion = normalizeText(question);
     const normalizedJobId = normalizeText(jobId);

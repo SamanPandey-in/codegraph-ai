@@ -15,3 +15,4 @@ export { aiService } from './services/aiService';
 export { default as QueryBar } from './components/QueryBar';
 export { default as QueryHistory } from './components/QueryHistory';
 export { default as AiPanel } from './components/AiPanel';
+export { default as AskPage } from './pages/AskPage';

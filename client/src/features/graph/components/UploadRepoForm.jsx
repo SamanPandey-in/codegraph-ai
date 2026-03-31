@@ -6,6 +6,8 @@ import {
   CheckCircle2,
   FolderOpen,
   Github,
+  ArrowRight,
+  Search,
   Loader2,
   Sparkles,
 } from 'lucide-react';
@@ -13,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/features/auth';
+import { setSelectedAnalyzeRepository } from '@/features/analyze';
 import { graphService } from '../services/graphService';
 import { analyzeCodebase, selectGraphStatus } from '../slices/graphSlice';
 
@@ -45,14 +48,13 @@ function toErrorMessage(err, fallback) {
 
 function SourceToggle({ value, onChange, disabled }) {
   return (
-    <div className="grid grid-cols-2 gap-2 rounded-lg border border-border bg-muted/30 p-1">
+    <div className="grid grid-cols-2 gap-2 rounded-xl shadow-neu-inset border-none bg-background/40 p-1.5 transition-all duration-300">
       <button
         type="button"
-        className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-          value === 'local'
-            ? 'bg-background shadow-sm text-foreground'
-            : 'text-muted-foreground hover:text-foreground'
-        }`}
+        className={`rounded-lg px-4 py-2.5 text-sm font-bold tracking-tight transition-all duration-300 active:scale-[0.98] ${value === 'local'
+            ? 'bg-background shadow-neu-flat text-foreground'
+            : 'text-muted-foreground/60 hover:text-foreground hover:bg-background/20'
+          }`}
         disabled={disabled}
         onClick={() => onChange('local')}
       >
@@ -60,11 +62,10 @@ function SourceToggle({ value, onChange, disabled }) {
       </button>
       <button
         type="button"
-        className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-          value === 'github'
-            ? 'bg-background shadow-sm text-foreground'
-            : 'text-muted-foreground hover:text-foreground'
-        }`}
+        className={`rounded-lg px-4 py-2.5 text-sm font-bold tracking-tight transition-all duration-300 active:scale-[0.98] ${value === 'github'
+            ? 'bg-background shadow-neu-flat text-foreground'
+            : 'text-muted-foreground/60 hover:text-foreground hover:bg-background/20'
+          }`}
         disabled={disabled}
         onClick={() => onChange('github')}
       >
@@ -76,14 +77,13 @@ function SourceToggle({ value, onChange, disabled }) {
 
 function GitHubModeToggle({ value, onChange, disabled }) {
   return (
-    <div className="grid grid-cols-2 gap-2 rounded-lg border border-border bg-muted/30 p-1">
+    <div className="grid grid-cols-2 gap-2 rounded-xl shadow-neu-inset border-none bg-background/40 p-1.5 transition-all duration-300">
       <button
         type="button"
-        className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-          value === 'public'
-            ? 'bg-background shadow-sm text-foreground'
-            : 'text-muted-foreground hover:text-foreground'
-        }`}
+        className={`rounded-lg px-4 py-2.5 text-sm font-bold tracking-tight transition-all duration-300 active:scale-[0.98] ${value === 'public'
+            ? 'bg-background shadow-neu-flat text-foreground'
+            : 'text-muted-foreground/60 hover:text-foreground hover:bg-background/20'
+          }`}
         disabled={disabled}
         onClick={() => onChange('public')}
       >
@@ -91,11 +91,10 @@ function GitHubModeToggle({ value, onChange, disabled }) {
       </button>
       <button
         type="button"
-        className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-          value === 'owned'
-            ? 'bg-background shadow-sm text-foreground'
-            : 'text-muted-foreground hover:text-foreground'
-        }`}
+        className={`rounded-lg px-4 py-2.5 text-sm font-bold tracking-tight transition-all duration-300 active:scale-[0.98] ${value === 'owned'
+            ? 'bg-background shadow-neu-flat text-foreground'
+            : 'text-muted-foreground/60 hover:text-foreground hover:bg-background/20'
+          }`}
         disabled={disabled}
         onClick={() => onChange('owned')}
       >
@@ -105,7 +104,7 @@ function GitHubModeToggle({ value, onChange, disabled }) {
   );
 }
 
-export default function AnalyzeForm() {
+export default function UploadRepoForm() {
   const dispatch = useDispatch();
   const location = useLocation();
   const status = useSelector(selectGraphStatus);
@@ -152,7 +151,7 @@ export default function AnalyzeForm() {
     if (!reanalyzeConfig) return;
 
     const { source: configSource, owner, repo, branch, fullName } = reanalyzeConfig;
-    
+
     if (configSource === 'local') {
       // Re-analyzing local repository
       setSource('local');
@@ -165,7 +164,7 @@ export default function AnalyzeForm() {
       // Default to 'owned' mode since we have owner and repo available
       setSource('github');
       setGitHubMode('owned');
-      
+
       if (owner && repo) {
         // Pre-populate with the repo data
         // This allows the form to show selected repo while still allowing branch selection
@@ -176,7 +175,7 @@ export default function AnalyzeForm() {
           fullName: fullName || `${owner}/${repo}`,
           defaultBranch: branch || 'main',
         });
-        
+
         if (branch) {
           setOwnedBranch(branch);
           // Also populate ownedBranches with at least the current branch
@@ -206,18 +205,18 @@ export default function AnalyzeForm() {
     if (githubMode === 'public') {
       return Boolean(
         publicRepoUrl.trim() &&
-          publicRepoInfo &&
-          publicBranch &&
-          !publicLoading,
+        publicRepoInfo &&
+        publicBranch &&
+        !publicLoading,
       );
     }
 
     return Boolean(
       isAuthenticated &&
-        !ownedAuthRequired &&
-        selectedOwnedRepo &&
-        ownedBranch &&
-        !ownedBranchesLoading,
+      !ownedAuthRequired &&
+      selectedOwnedRepo &&
+      ownedBranch &&
+      !ownedBranchesLoading,
     );
   }, [
     source,
@@ -469,6 +468,42 @@ export default function AnalyzeForm() {
       return;
     }
 
+    if (source === 'local') {
+      dispatch(
+        setSelectedAnalyzeRepository({
+          source: 'local',
+          localPath: localPath.trim(),
+        }),
+      );
+    }
+
+    if (source === 'github' && githubMode === 'public' && publicRepoInfo) {
+      dispatch(
+        setSelectedAnalyzeRepository({
+          source: 'github',
+          mode: 'public',
+          owner: publicRepoInfo.owner,
+          repo: publicRepoInfo.repo,
+          branch: publicBranch,
+          url: publicRepoUrl.trim(),
+          fullName: publicRepoInfo.fullName,
+        }),
+      );
+    }
+
+    if (source === 'github' && githubMode === 'owned' && selectedOwnedRepo) {
+      dispatch(
+        setSelectedAnalyzeRepository({
+          source: 'github',
+          mode: 'owned',
+          owner: selectedOwnedRepo.owner,
+          repo: selectedOwnedRepo.name,
+          branch: ownedBranch,
+          fullName: selectedOwnedRepo.fullName,
+        }),
+      );
+    }
+
     dispatch(analyzeCodebase(buildAnalyzePayload()));
   };
 
@@ -514,9 +549,9 @@ export default function AnalyzeForm() {
         timedOut
           ? 'Folder picker did not open in time. Please try Browse again. If it still fails, paste an absolute path manually.'
           : toErrorMessage(
-              err,
-              'Could not open native folder picker. Please paste the absolute path manually.',
-            ),
+            err,
+            'Could not open native folder picker. Please paste the absolute path manually.',
+          ),
       );
     } finally {
       setLocalBrowseLoading(false);
@@ -525,11 +560,11 @@ export default function AnalyzeForm() {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-3.5rem)] px-4 py-16">
-      <div className="mb-2 flex size-14 items-center justify-center rounded-2xl border border-border bg-muted">
-        <Sparkles className="size-6 text-primary" />
+      <div className="mb-2 flex size-14 items-center justify-center rounded-2xl shadow-neu-inset border-none bg-background/50 animate-in zoom-in duration-700">
+        <Sparkles className="size-6 text-gold" />
       </div>
       <h1 className="mt-4 text-4xl font-bold tracking-tight text-center">
-        Analyze a Codebase
+        Upload Repo
       </h1>
       <p className="mt-3 max-w-md text-center text-muted-foreground">
         Choose a local or GitHub repository, select a branch when required, and
@@ -547,8 +582,8 @@ export default function AnalyzeForm() {
         />
 
         {source === 'local' && (
-          <div className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4">
-            <Label htmlFor="project-path">Local repository path</Label>
+          <div className="flex flex-col gap-4 rounded-2xl shadow-neu-inset border-none bg-background/40 p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <Label htmlFor="project-path" className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground/70">Local repository path</Label>
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <FolderOpen className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
@@ -574,6 +609,7 @@ export default function AnalyzeForm() {
                 type="button"
                 variant="outline"
                 onClick={browseLocalPath}
+                className="rounded-xl shadow-neu-inset border-none bg-background/50 active-scale"
                 disabled={
                   isLoading ||
                   localBrowseLoading ||
@@ -600,6 +636,7 @@ export default function AnalyzeForm() {
                 type="button"
                 variant="outline"
                 onClick={validateLocalRepository}
+                className="rounded-xl shadow-neu-inset border-none bg-background/50 active-scale"
                 disabled={isLoading || localValidationState === 'loading' || !localPath.trim()}
               >
                 {localValidationState === 'loading' ? (
@@ -642,7 +679,7 @@ export default function AnalyzeForm() {
         )}
 
         {source === 'github' && (
-          <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
+          <div className="flex flex-col gap-4 rounded-2xl shadow-neu-inset border-none bg-background/40 p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <GitHubModeToggle
               value={githubMode}
               onChange={handleGitHubModeChange}
@@ -668,7 +705,7 @@ export default function AnalyzeForm() {
                           setPublicBranch('');
                         }}
                         placeholder="https://github.com/owner/repository"
-                        className="pl-9"
+                        className="pl-9 rounded-xl shadow-neu-inset border-none bg-background/50"
                         disabled={isLoading}
                         autoComplete="off"
                         spellCheck={false}
@@ -678,6 +715,7 @@ export default function AnalyzeForm() {
                     <Button
                       type="button"
                       variant="outline"
+                      className="rounded-xl shadow-neu-inset border-none bg-background/50 active-scale"
                       disabled={isLoading || publicLoading || !publicRepoUrl.trim()}
                       onClick={resolvePublicRepository}
                     >
@@ -712,13 +750,13 @@ export default function AnalyzeForm() {
                   </p>
                 )}
 
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="public-branch">Branch</Label>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="public-branch" className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground/70">Branch</Label>
                   <select
                     id="public-branch"
                     value={publicBranch}
                     onChange={(e) => setPublicBranch(e.target.value)}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex h-11 w-full rounded-xl shadow-neu-inset border-none bg-background/50 px-4 py-2 text-sm font-medium text-foreground transition-all duration-300 focus:ring-1 focus:ring-gold/50 disabled:cursor-not-allowed disabled:opacity-50 appearance-none"
                     disabled={
                       isLoading ||
                       publicLoading ||
@@ -761,6 +799,7 @@ export default function AnalyzeForm() {
                         type="button"
                         variant="outline"
                         onClick={handleRefreshOwnedRepos}
+                        className="rounded-xl shadow-neu-inset border-none bg-background/50 active-scale"
                         disabled={isLoading || ownedReposLoading}
                       >
                         {ownedReposLoading ? (
@@ -774,56 +813,61 @@ export default function AnalyzeForm() {
                       </Button>
                     </div>
 
-                    <Input
-                      id="owned-repo-search"
-                      type="text"
-                      value={repoQuery}
-                      onChange={(e) => setRepoQuery(e.target.value)}
-                      placeholder="Search repositories..."
-                      disabled={isLoading || ownedReposLoading}
-                    />
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+                      <Input
+                        id="owned-repo-search"
+                        type="text"
+                        value={repoQuery}
+                        onChange={(e) => setRepoQuery(e.target.value)}
+                        placeholder="Search your repositories..."
+                        className="pl-9 rounded-xl shadow-neu-inset border-none bg-background/50"
+                        disabled={isLoading || ownedReposLoading}
+                        autoComplete="off"
+                      />
+                    </div>
 
-                    {ownedReposLoading && (
-                      <div className="text-sm text-muted-foreground flex items-center gap-2 py-4 justify-center rounded-md border border-border bg-muted/20">
-                        <Loader2 className="size-4 animate-spin" />
-                        Fetching repositories...
-                      </div>
-                    )}
+                    <div className="max-h-60 overflow-y-auto rounded-2xl shadow-neu-inset border-none bg-background/30 p-2 custom-scrollbar">
+                      {ownedReposLoading && (
+                        <div className="flex items-center justify-center py-10">
+                          <Loader2 className="size-6 animate-spin text-gold" />
+                        </div>
+                      )}
 
-                    {!ownedReposLoading && filteredOwnedRepos.length > 0 && (
-                      <div className="grid gap-2 max-h-60 overflow-auto pr-1 rounded-md border border-border p-2">
-                        {filteredOwnedRepos.map((repo) => (
-                          <button
-                            key={repo.id}
-                            type="button"
-                            className={`text-left rounded-md border px-3 py-2 transition-colors ${
-                              selectedOwnedRepo?.id === repo.id
-                                ? 'border-primary bg-primary/10'
-                                : 'border-border hover:bg-muted/50'
-                            }`}
-                            onClick={() => handleOwnedRepoSelect(repo)}
-                          >
-                            <div className="font-medium text-sm">{repo.fullName}</div>
-                            <div className="text-xs text-muted-foreground mt-1">
-                              Default branch: {repo.defaultBranch}
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                      {!ownedReposLoading && filteredOwnedRepos.length === 0 && (
+                        <p className="py-10 text-center text-xs text-muted-foreground">
+                          {repoQuery ? 'No matching repositories found.' : 'Search for a repository above.'}
+                        </p>
+                      )}
 
-                    {!ownedReposLoading && hasLoadedOwnedRepos && filteredOwnedRepos.length === 0 && (
-                      <div className="text-sm text-muted-foreground border border-dashed border-border rounded-lg p-3 text-center">
-                        {ownedReposError || 'No repositories found for this account.'}
-                      </div>
-                    )}
+                      {!ownedReposLoading && filteredOwnedRepos.length > 0 && (
+                        <div className="grid gap-1">
+                          {filteredOwnedRepos.map((repo) => (
+                            <button
+                              key={repo.id}
+                              type="button"
+                              onClick={() => handleOwnedRepoSelect(repo)}
+                              disabled={isLoading}
+                              className={`flex flex-col items-start gap-0.5 rounded-xl px-4 py-3 text-left transition-all active-scale ${selectedOwnedRepo?.id === repo.id
+                                  ? 'bg-background shadow-neu-flat text-foreground'
+                                  : 'text-muted-foreground hover:bg-background/20 hover:text-foreground'
+                                }`}
+                            >
+                              <span className="text-sm font-bold tracking-tight">{repo.name}</span>
+                              <span className="text-[10px] opacity-60">{repo.fullName}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </>
                 )}
 
                 {selectedOwnedRepo && (
-                  <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs">
-                    <p className="font-medium text-foreground">
-                      Selected repository: {selectedOwnedRepo.fullName}
+                  <div className="rounded-xl shadow-neu-inset border-none bg-background/60 px-4 py-3 text-xs">
+                    <p className="font-bold uppercase tracking-widest text-[9px] opacity-40">Selected repository</p>
+                    <p className="font-bold text-foreground mt-0.5">
+                      {selectedOwnedRepo.fullName}
                     </p>
                   </div>
                 )}
@@ -836,13 +880,13 @@ export default function AnalyzeForm() {
                 )}
 
                 {selectedOwnedRepo && (
-                  <div className="flex flex-col gap-1.5 rounded-md border border-border bg-muted/20 p-3">
-                    <Label htmlFor="owned-branch-inline">Branch</Label>
+                  <div className="flex flex-col gap-2 rounded-xl shadow-neu-inset border-none bg-background/40 p-4">
+                    <Label htmlFor="owned-branch-inline" className="text-[9px] uppercase font-bold tracking-[0.2em] opacity-40">Select Branch</Label>
                     <select
                       id="owned-branch-inline"
                       value={ownedBranch}
                       onChange={(e) => setOwnedBranch(e.target.value)}
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                      className="flex h-11 w-full rounded-xl shadow-neu-inset border-none bg-background/50 px-4 py-2 text-sm font-bold text-foreground transition-all duration-300 focus:ring-1 focus:ring-gold/50 disabled:cursor-not-allowed disabled:opacity-50 appearance-none"
                       disabled={ownedBranchesLoading || ownedBranches.length === 0}
                     >
                       <option value="">
@@ -877,14 +921,22 @@ export default function AnalyzeForm() {
           </div>
         )}
 
-        <Button type="submit" size="lg" disabled={isLoading || !canAnalyze}>
+        <Button
+          type="submit"
+          size="lg"
+          className="mt-6 h-14 w-full rounded-2xl bg-gold text-white shadow-xl hover:bg-gold/90 transition-all font-black uppercase tracking-widest text-xs active-scale"
+          disabled={isLoading || !canAnalyze}
+        >
           {isLoading ? (
             <>
-              <Loader2 className="mr-2 size-4 animate-spin" />
-              Analyzing…
+              <Loader2 className="mr-2 size-5 animate-spin" />
+              Analyzing Codebase...
             </>
           ) : (
-            'Analyze Codebase'
+            <>
+              Analyze Codebase Structure
+              <ArrowRight className="ml-2 size-4" />
+            </>
           )}
         </Button>
       </form>

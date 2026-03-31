@@ -68,15 +68,18 @@ function parseGitHubRateLimitError(response, context = 'GitHub API request') {
   throw err;
 }
 
-async function githubFetchRaw(urlOrPath, { token, headers = {} } = {}) {
+async function githubFetchRaw(urlOrPath, { token, headers = {}, method = 'GET', body } = {}) {
   const targetUrl = urlOrPath.startsWith('http') ? urlOrPath : `${GITHUB_API_BASE}${urlOrPath}`;
   return fetch(targetUrl, {
+    method,
     headers: {
       Accept: 'application/vnd.github+json',
       'User-Agent': 'codegraph-ai',
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...headers,
     },
+    ...(body ? { body: JSON.stringify(body) } : {}),
   });
 }
 
@@ -175,6 +178,176 @@ export async function fetchRepoBranches({ owner, repo, token }) {
     name: branch.name,
     protected: Boolean(branch.protected),
   }));
+}
+
+function buildRepoContentsPath({ owner, repo, path: repoPath = '', ref = '' }) {
+  const encodedOwner = encodeURIComponent(owner);
+  const encodedRepo = encodeURIComponent(repo);
+  const normalizedPath = String(repoPath || '')
+    .split('/')
+    .map((segment) => segment.trim())
+    .filter(Boolean)
+    .map((segment) => encodeURIComponent(segment))
+    .join('/');
+
+  const basePath = normalizedPath
+    ? `/repos/${encodedOwner}/${encodedRepo}/contents/${normalizedPath}`
+    : `/repos/${encodedOwner}/${encodedRepo}/contents`;
+
+  if (!ref) return basePath;
+  return `${basePath}?ref=${encodeURIComponent(ref)}`;
+}
+
+function normalizeContentEntry(entry) {
+  return {
+    name: entry?.name || '',
+    path: entry?.path || '',
+    type: entry?.type || 'file',
+    size: Number.isFinite(entry?.size) ? entry.size : 0,
+    sha: entry?.sha || null,
+    htmlUrl: entry?.html_url || null,
+    downloadUrl: entry?.download_url || null,
+  };
+}
+
+export async function fetchRepoContents({ owner, repo, path = '', ref = '', token }) {
+  const apiPath = buildRepoContentsPath({ owner, repo, path, ref });
+  const data = await githubFetch(apiPath, { token });
+
+  if (!Array.isArray(data)) {
+    return [];
+  }
+
+  const entries = data.map(normalizeContentEntry);
+
+  entries.sort((a, b) => {
+    const aIsDir = a.type === 'dir';
+    const bIsDir = b.type === 'dir';
+
+    if (aIsDir && !bIsDir) return -1;
+    if (!aIsDir && bIsDir) return 1;
+
+    return a.name.localeCompare(b.name);
+  });
+
+  return entries;
+}
+
+export async function fetchRepoTree({ owner, repo, ref = '', token }) {
+  const encodedOwner = encodeURIComponent(owner);
+  const encodedRepo = encodeURIComponent(repo);
+  const encodedRef = encodeURIComponent(ref || 'HEAD');
+  const data = await githubFetch(
+    `/repos/${encodedOwner}/${encodedRepo}/git/trees/${encodedRef}?recursive=1`,
+    { token },
+  );
+
+  const tree = Array.isArray(data?.tree) ? data.tree : [];
+
+  return {
+    truncated: Boolean(data?.truncated),
+    tree: tree.map((entry) => ({
+      path: entry?.path || '',
+      type: entry?.type || 'blob',
+      size: Number.isFinite(entry?.size) ? entry.size : 0,
+      sha: entry?.sha || null,
+    })),
+  };
+}
+
+function decodeGitHubBase64Content(content) {
+  try {
+    return Buffer.from(String(content || ''), 'base64').toString('utf8');
+  } catch {
+    const err = new Error('Failed to decode GitHub file content.');
+    err.statusCode = 422;
+    throw err;
+  }
+}
+
+function encodeGitHubBase64Content(content) {
+  return Buffer.from(String(content || ''), 'utf8').toString('base64');
+}
+
+export async function fetchRepoFileContent({ owner, repo, path, ref = '', token }) {
+  const apiPath = buildRepoContentsPath({ owner, repo, path, ref });
+  const data = await githubFetch(apiPath, { token });
+
+  if (Array.isArray(data) || data?.type !== 'file') {
+    const err = new Error('Requested path is not a file.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const encoding = data?.encoding || 'base64';
+  const rawContent = String(data?.content || '').replace(/\n/g, '');
+
+  if (encoding !== 'base64') {
+    const err = new Error(`Unsupported GitHub file encoding: ${encoding}.`);
+    err.statusCode = 422;
+    throw err;
+  }
+
+  const content = decodeGitHubBase64Content(rawContent);
+
+  return {
+    name: data?.name || path.split('/').pop() || 'unknown-file',
+    path: data?.path || path,
+    sha: data?.sha || null,
+    size: Number.isFinite(data?.size) ? data.size : 0,
+    htmlUrl: data?.html_url || null,
+    downloadUrl: data?.download_url || null,
+    content,
+    encoding: 'utf8',
+  };
+}
+
+export async function updateRepoFileContent({
+  owner,
+  repo,
+  path,
+  ref = '',
+  token,
+  content,
+  sha,
+  message,
+}) {
+  if (!token) {
+    const err = new Error('GitHub authentication required to update files.');
+    err.statusCode = 401;
+    throw err;
+  }
+
+  if (!sha) {
+    const err = new Error('A file SHA is required to update file content.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const apiPath = buildRepoContentsPath({ owner, repo, path });
+  const response = await githubFetchRaw(apiPath, {
+    token,
+    method: 'PUT',
+    body: {
+      message: message || `Update ${path} via CodeGraph AI`,
+      content: encodeGitHubBase64Content(content),
+      sha,
+      ...(ref ? { branch: ref } : {}),
+    },
+  });
+
+  if (!response.ok) {
+    parseGitHubRateLimitError(response, `GitHub file update (${path})`);
+  }
+
+  const data = await response.json();
+
+  return {
+    path: data?.content?.path || path,
+    sha: data?.content?.sha || null,
+    htmlUrl: data?.content?.html_url || `https://github.com/${owner}/${repo}/blob/${ref || 'main'}/${path}`,
+    commitSha: data?.commit?.sha || null,
+  };
 }
 
 export async function fetchOwnedRepositories({ token }) {

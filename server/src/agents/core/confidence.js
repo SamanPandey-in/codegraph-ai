@@ -23,7 +23,7 @@ export const CONFIDENCE_THRESHOLDS = {
 export const DEFAULT_AGENT_WEIGHTS = {
 	'ingestion-agent': 0.1,
 	'scanner-agent': 0.1,
-	'parser-agent': 0.25,
+	'polyglot-parser-agent': 0.25,
 	'graph-builder-agent': 0.25,
 	'enrichment-agent': 0.1,
 	'embedding-agent': 0.1,
@@ -75,6 +75,19 @@ export function scoreParser({ totalAttempted = 0, successCount = 0, failedCount 
 	const parseRate = safeDiv(successCount, Math.max(totalAttempted, 1), 0);
 	const errorPenalty = Math.min(0.3, safeDiv(failedCount, Math.max(totalAttempted, 1), 0));
 	return round3(parseRate * (1 - errorPenalty));
+}
+
+export function scorePolyglotParser({
+	totalAttempted = 0,
+	successCount = 0,
+	failedCount = 0,
+	languageBreakdown = {},
+} = {}) {
+	const parseRate = safeDiv(successCount, Math.max(totalAttempted, 1), 0);
+	const errorPenalty = Math.min(0.3, safeDiv(failedCount, Math.max(totalAttempted, 1), 0));
+	const langCount = Object.keys(languageBreakdown || {}).length;
+	const langBonus = Math.min(0.05, langCount * 0.005);
+	return round3(parseRate * (1 - errorPenalty) + langBonus);
 }
 
 export function scoreGraphBuilder({

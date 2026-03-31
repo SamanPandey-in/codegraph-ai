@@ -14,17 +14,17 @@ import { useAuth } from '../context/AuthContext';
 
 const FEATURE_LIST = [
   {
-    icon: <div className="flex size-8 items-center justify-center rounded-lg bg-gold/10 border border-gold/20 shadow-sm"><GitBranch className="size-4 text-gold" /></div>,
+    icon: <div className="flex size-10 items-center justify-center rounded-xl bg-gold/10 shadow-neu-inset border-none group-hover:scale-110 transition-transform duration-300"><GitBranch className="size-5 text-gold" /></div>,
     title: 'Code Analysis',
     description: 'Deep insights into your codebase structure',
   },
   {
-    icon: <div className="flex size-8 items-center justify-center rounded-lg bg-gold/10 border border-gold/20 shadow-sm"><Network className="size-4 text-gold" /></div>,
+    icon: <div className="flex size-10 items-center justify-center rounded-xl bg-gold/10 shadow-neu-inset border-none group-hover:scale-110 transition-transform duration-300"><Network className="size-5 text-gold" /></div>,
     title: 'Dependency Graphs',
     description: 'Visualize every import relationship interactively',
   },
   {
-    icon: <div className="flex size-8 items-center justify-center rounded-lg bg-gold/10 border border-gold/20 shadow-sm"><Zap className="size-4 text-gold" /></div>,
+    icon: <div className="flex size-10 items-center justify-center rounded-xl bg-gold/10 shadow-neu-inset border-none group-hover:scale-110 transition-transform duration-300"><Zap className="size-5 text-gold" /></div>,
     title: 'AI-Ready',
     description: 'Smart impact analysis coming in Phase 2',
   },
@@ -49,7 +49,7 @@ export default function SignupPage() {
 
   return (
     <div className="flex min-h-screen bg-background font-sans selection:bg-gold/30 selection:text-gold items-center justify-center p-4 sm:p-8">
-      <div className="flex w-full max-w-5xl h-[700px] overflow-hidden rounded-[2.5rem] shadow-2xl border border-border/10 bg-card group/container">
+      <div className="flex w-full max-w-5xl h-[700px] overflow-hidden rounded-[2.5rem] shadow-neu-inset border-none bg-background/40 group/container">
         {/* Left Side: Form */}
         <div className="flex flex-col justify-center w-full lg:w-1/2 p-8 sm:p-12 relative animate-in fade-in slide-in-from-left-8 duration-1000">
           <div className="mb-10 flex items-center gap-2 group cursor-pointer">
@@ -94,7 +94,7 @@ export default function SignupPage() {
             {' '}and{' '}
             <Link to="/privacy" className="text-gold font-bold hover:underline underline-offset-4">Privacy Policy</Link>
           </p>
-          
+
           <p className="mt-4 text-center text-sm">
             <span className="text-muted-foreground font-medium">Already have an account? </span>
             <Link to="/login" className="text-gold font-black hover:underline underline-offset-4">Sign In</Link>
@@ -114,14 +114,14 @@ export default function SignupPage() {
         </div>
 
         {/* Right Side: Visual Accent */}
-        <div className="hidden lg:flex flex-col justify-end w-1/2 bg-[#0B0B0B] p-16 relative overflow-hidden animate-in fade-in slide-in-from-right-8 duration-1000">
+        <div className="hidden lg:flex flex-col justify-end w-1/2 bg-[rgb(var(--auth-panel))] p-16 relative overflow-hidden animate-in fade-in slide-in-from-right-8 duration-1000">
           {/* Abstract Gold Art */}
           <div className="absolute inset-0 opacity-40">
-            <div className="absolute top-[-10%] right-[-10%] size-[500px] rounded-full bg-gold/20 blur-[120px] animate-pulse" />
-            <div className="absolute bottom-[-20%] left-[-10%] size-[500px] rounded-full bg-gold/10 blur-[130px]" />
+            <div className="absolute top-[-10%] right-[-10%] size-[500px] rounded-full bg-gold/5 blur-[120px] animate-pulse" />
+            <div className="absolute bottom-[-20%] left-[-10%] size-[500px] rounded-full bg-gold/5 blur-[130px]" />
           </div>
-          
-          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10" />
+
+          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-5" />
 
           <div className="relative z-10 space-y-10">
             <div>
@@ -135,8 +135,8 @@ export default function SignupPage() {
 
             <ul className="space-y-6">
               {FEATURE_LIST.map((f, i) => (
-                <li 
-                  key={f.title} 
+                <li
+                  key={f.title}
                   className="flex items-start gap-4 group/item animate-in fade-in slide-in-from-right-4 fill-mode-both"
                   style={{ animationDelay: `${1200 + i * 150}ms` }}
                 >
@@ -148,7 +148,7 @@ export default function SignupPage() {
                 </li>
               ))}
             </ul>
-            
+
             <div className="pt-6 border-t border-white/10 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <CheckCircle2 className="size-4 text-gold" />

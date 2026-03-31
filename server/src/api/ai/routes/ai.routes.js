@@ -1,15 +1,16 @@
 import { Router } from 'express';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
-import OpenAI from 'openai';
 import { QueryAgent } from '../../../agents/query/QueryAgent.js';
 import { AnalysisAgent } from '../../../agents/analysis/AnalysisAgent.js';
+import { SnippetAnalyzerAgent } from '../../../agents/analysis/SnippetAnalyzerAgent.js';
 import { pgPool, redisClient } from '../../../infrastructure/connections.js';
+import { requirePlan } from '../../../middleware/planGuard.middleware.js';
+import { createChatClient } from '../../../services/ai/llmProvider.js';
 
 const router = Router();
-const openaiClient = process.env.OPENAI_API_KEY
-  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-  : null;
+const chatClient = createChatClient();
+const defaultChatModel = process.env.AI_MODEL || process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
 const aiLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -136,6 +137,91 @@ function toGraphFromRows(nodeRows = [], edgeRows = []) {
 
 router.use(aiLimiter);
 
+router.post('/suggest-refactor', requirePlan(), async (req, res, next) => {
+  const jobId = String(req.body?.jobId || '').trim();
+  const filePath = String(req.body?.filePath || '').trim();
+
+  if (!jobId || !filePath) {
+    return res.status(400).json({ error: 'jobId and filePath are required.' });
+  }
+
+  try {
+    const nodeResult = await pgPool.query(
+      `
+        SELECT file_path, file_type, declarations, metrics, summary
+        FROM graph_nodes
+        WHERE job_id = $1 AND file_path = $2
+        LIMIT 1
+      `,
+      [jobId, filePath],
+    );
+
+    if (nodeResult.rowCount === 0) {
+      return res.status(404).json({ error: 'File not found.' });
+    }
+
+    if (!chatClient.isConfigured()) {
+      return res.status(503).json({ error: 'AI provider is not configured.' });
+    }
+
+    const node = nodeResult.rows[0];
+    const exportsList = (node.declarations || []).map((declaration) => declaration?.name).filter(Boolean);
+
+    const prompt = `You are a senior software architect reviewing a file in a dependency graph analysis.
+
+File: ${node.file_path}
+Type: ${node.file_type}
+Lines of code: ${node.metrics?.loc || 'unknown'}
+In-degree (files that import this): ${node.metrics?.inDegree || 0}
+Out-degree (files this imports): ${node.metrics?.outDegree || 0}
+Exports: ${exportsList.join(', ') || 'none'}
+Summary: ${node.summary || 'no summary available'}
+
+Respond with a JSON object:
+{
+  "concerns": ["list of specific architectural concerns"],
+  "suggestions": ["list of concrete refactoring steps"],
+  "priority": "high | medium | low",
+  "estimatedEffort": "hours estimate as a string, e.g. '2-4 hours'"
+}
+Only respond with the JSON object.`;
+
+    const completion = await chatClient.createChatCompletion({
+      model: defaultChatModel,
+      maxTokens: 400,
+      temperature: 0.2,
+      messages: [{ role: 'user', content: prompt }],
+    });
+
+    const content = completion?.content?.trim() || '';
+
+    let parsed;
+    try {
+      parsed = JSON.parse(content);
+    } catch {
+      parsed = {
+        concerns: [],
+        suggestions: content ? [content] : [],
+        priority: 'medium',
+        estimatedEffort: 'unknown',
+      };
+    }
+
+    return res.status(200).json({
+      filePath,
+      concerns: Array.isArray(parsed?.concerns) ? parsed.concerns : [],
+      suggestions: Array.isArray(parsed?.suggestions) ? parsed.suggestions : [],
+      priority: ['high', 'medium', 'low'].includes(parsed?.priority) ? parsed.priority : 'medium',
+      estimatedEffort:
+        typeof parsed?.estimatedEffort === 'string' && parsed.estimatedEffort.trim()
+          ? parsed.estimatedEffort.trim()
+          : 'unknown',
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get('/queries', async (req, res, next) => {
   const authUser = getAuthUser(req);
   if (!authUser?.id) {
@@ -253,21 +339,15 @@ router.post('/explain/stream', async (req, res, next) => {
     return res.status(400).json({ error: 'question and jobId are required.' });
   }
 
-  if (!openaiClient) {
-    return res.status(503).json({ error: 'OpenAI is not configured for streaming.' });
+  if (!chatClient.isConfigured()) {
+    return res.status(503).json({ error: 'AI provider is not configured for streaming.' });
   }
 
   let clientClosed = false;
-  let stream = null;
+  let streamSession = null;
 
   const closeStream = () => {
-    if (typeof stream?.abort === 'function') {
-      stream.abort();
-    }
-
-    if (typeof stream?.controller?.abort === 'function') {
-      stream.controller.abort();
-    }
+    streamSession?.cancel?.();
   };
 
   const writeEvent = (payload) => {
@@ -309,25 +389,18 @@ router.post('/explain/stream', async (req, res, next) => {
       res.flushHeaders();
     }
 
-    stream = await openaiClient.chat.completions.stream({
-      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-      max_tokens: 500,
-      messages: [
-        {
-          role: 'user',
-          content: question,
-        },
-      ],
+    streamSession = await chatClient.createStream({
+      model: defaultChatModel,
+      maxTokens: 500,
+      messages: [{ role: 'user', content: question }],
+      onText: (text) => {
+        if (!clientClosed) {
+          writeEvent({ text });
+        }
+      },
     });
 
-    for await (const chunk of stream) {
-      if (clientClosed) break;
-
-      const text = chunk?.choices?.[0]?.delta?.content || '';
-      if (text) {
-        writeEvent({ text });
-      }
-    }
+    await streamSession.consume();
 
     if (!clientClosed) {
       res.write('data: [DONE]\n\n');
@@ -412,6 +485,68 @@ router.post('/impact', async (req, res, next) => {
       affectedFiles: result.data?.impactedFiles || [],
       deadCodeCandidates: result.data?.deadCodeCandidates || [],
     });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/snippet-impact', async (req, res, next) => {
+  const authUser = getAuthUser(req);
+  if (!authUser?.id) {
+    return res.status(401).json({ error: 'Authentication required.' });
+  }
+
+  const jobId = String(req.body?.jobId || '').trim();
+  const filePath = String(req.body?.filePath || '').trim();
+  const snippet = String(req.body?.snippet || '').trim();
+  const lineStart = Number.parseInt(req.body?.lineStart, 10);
+  const lineEnd = Number.parseInt(req.body?.lineEnd, 10);
+
+  if (!jobId || !filePath || !snippet) {
+    return res.status(400).json({ error: 'jobId, filePath, and snippet are required.' });
+  }
+
+  try {
+    const userId = await resolveDatabaseUserId(authUser);
+    if (!userId) {
+      return res.status(500).json({ error: 'Failed to resolve authenticated user.' });
+    }
+
+    const ownership = await pgPool.query(
+      `
+        SELECT 1
+        FROM analysis_jobs
+        WHERE id = $1 AND user_id = $2
+        LIMIT 1
+      `,
+      [jobId, userId],
+    );
+
+    if (ownership.rowCount === 0) {
+      return res.status(404).json({ error: 'Analysis job not found for this user.' });
+    }
+
+    const agent = new SnippetAnalyzerAgent({ db: pgPool });
+    const result = await agent.process(
+      {
+        jobId,
+        filePath,
+        snippet,
+        lineStart,
+        lineEnd,
+      },
+      { jobId },
+    );
+
+    if (result.status === 'failed') {
+      const statusCode = Number(result.errors?.[0]?.code) || 400;
+      return res.status(statusCode).json({
+        error: result.errors?.[0]?.message || 'Unable to analyze snippet impact.',
+        details: result.errors || [],
+      });
+    }
+
+    return res.status(200).json(result.data);
   } catch (error) {
     return next(error);
   }

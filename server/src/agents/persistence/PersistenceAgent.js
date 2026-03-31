@@ -39,6 +39,7 @@ export class PersistenceAgent extends BaseAgent {
     const functionNodes = input?.functionNodes || {};
     const embeddings = input?.embeddings || {};
     const enriched = input?.enriched || {};
+    const contracts = input?.contracts || {};
     const topology = input?.topology || {};
 
     if (!jobId) {
@@ -116,11 +117,26 @@ export class PersistenceAgent extends BaseAgent {
       }
     }
 
+    const contractPaths = [];
+    const contractRoutes = [];
+    const contractEnvDeps = [];
+    const contractExtServices = [];
+    const contractCaching = [];
+
+    for (const [filePath, contract] of Object.entries(contracts)) {
+      contractPaths.push(filePath);
+      contractRoutes.push(toJson(contract?.routes, []));
+      contractEnvDeps.push(toJson(contract?.envDependencies, []));
+      contractExtServices.push(toJson(contract?.externalServices, []));
+      contractCaching.push(toJson(contract?.cachingPatterns, []));
+    }
+
     const recordsAttempted =
       nodePaths.length +
       edgeSourcePaths.length +
       embeddingPaths.length +
-      functionNodePaths.length;
+      functionNodePaths.length +
+      contractPaths.length;
     let recordsWritten = 0;
 
     let client;
@@ -256,6 +272,45 @@ export class PersistenceAgent extends BaseAgent {
         recordsWritten += functionNodeResult.rowCount || 0;
       }
 
+      await client.query('SAVEPOINT after_function_nodes');
+
+      if (contractPaths.length > 0) {
+        const contractResult = await client.query(
+          `
+            INSERT INTO api_contracts (
+              job_id,
+              file_path,
+              routes,
+              env_deps,
+              ext_services,
+              caching
+            )
+            SELECT
+              $1,
+              unnest($2::text[]),
+              unnest($3::jsonb[]),
+              unnest($4::jsonb[]),
+              unnest($5::jsonb[]),
+              unnest($6::jsonb[])
+            ON CONFLICT (job_id, file_path) DO UPDATE
+            SET routes = EXCLUDED.routes,
+                env_deps = EXCLUDED.env_deps,
+                ext_services = EXCLUDED.ext_services,
+                caching = EXCLUDED.caching
+          `,
+          [
+            jobId,
+            contractPaths,
+            contractRoutes,
+            contractEnvDeps,
+            contractExtServices,
+            contractCaching,
+          ],
+        );
+
+        recordsWritten += contractResult.rowCount || 0;
+      }
+
       await client.query('COMMIT');
 
       const confidence = scorePersistence({
@@ -273,6 +328,7 @@ export class PersistenceAgent extends BaseAgent {
             edges: edgeSourcePaths.length,
             embeddings: embeddingPaths.length,
             functionNodes: functionNodePaths.length,
+            contracts: contractPaths.length,
           },
           durationMs: Date.now() - start,
         },

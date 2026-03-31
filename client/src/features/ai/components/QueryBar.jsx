@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { Search, X, CheckCircle, AlertCircle } from 'lucide-react';
+import { Search, X, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { queryGraph, resetAiState, selectAiQueryState } from '../slices/aiSlice';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -53,10 +53,10 @@ export default function QueryBar({ jobId }) {
     <div className="relative w-full">
       {/* Minimalist Query Input */}
       <div
-        className={`transition-all duration-300 ease-out ${
+        className={`transition-all duration-500 ease-[var(--ease-out)] ${
           expanded || hasResult
-            ? 'ring-1 ring-primary/20 rounded-lg bg-background'
-            : 'bg-muted/40 hover:bg-muted/60 rounded-full'
+            ? 'shadow-neu-flat rounded-xl bg-background/60'
+            : 'shadow-neu-inset rounded-full bg-background/40 hover:bg-background/60'
         }`}
       >
         <form onSubmit={handleAsk} className="flex items-center gap-2 px-4 py-3">
@@ -87,17 +87,17 @@ export default function QueryBar({ jobId }) {
           <Button
             type="submit"
             size="sm"
-            variant="default"
+            variant="neumo"
             disabled={!question.trim() || !jobId || isLoading}
             className="ml-auto"
           >
             {isLoading ? (
               <span className="flex items-center gap-2">
-                <span className="size-3 border-1.5 border-current border-t-transparent rounded-full animate-spin" />
+                <Loader2 className="size-3.5 animate-spin" />
                 Searching
               </span>
             ) : (
-              'Ask'
+              'Ask AI'
             )}
           </Button>
         </form>
@@ -105,10 +105,10 @@ export default function QueryBar({ jobId }) {
         {/* Results Display */}
         {(hasResult || hasError) && (
           <div
-            className={`border-t transition-all duration-300 ${
+            className={`transition-all duration-500 animate-in fade-in slide-in-from-top-2 ${
               hasResult
-                ? 'border-muted bg-gradient-to-b from-background via-background to-muted/20'
-                : 'border-destructive/20 bg-destructive/5'
+                ? 'border-t border-border/10 bg-gradient-to-b from-transparent to-background/20'
+                : 'border-t border-destructive/10 bg-destructive/5'
             }`}
           >
             <div className="px-4 py-3 space-y-3">

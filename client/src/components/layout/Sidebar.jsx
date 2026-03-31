@@ -7,6 +7,9 @@ import {
   Share2,
   ChevronLeft,
   ChevronRight,
+  UploadIcon,
+  GitGraphIcon,
+  MessageSquare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -17,14 +20,24 @@ const NAV_ITEMS = [
     label: 'Dashboard',
   },
   {
+    to: '/upload-repo',
+    icon: <UploadIcon className="size-4 shrink-0" />,
+    label: 'Upload Repo',
+  },
+  {
     to: '/analyze',
-    icon: <Network className="size-4 shrink-0" />,
+    icon: <GitGraphIcon className="size-4 shrink-0" />,
     label: 'Analyze',
   },
   {
     to: '/graph',
-    icon: <Share2 className="size-4 shrink-0" />,
+    icon: <Network className="size-4 shrink-0" />,
     label: 'Graph',
+  },
+  {
+    to: '/ask',
+    icon: <MessageSquare className="size-4 shrink-0" />,
+    label: 'Ask',
   },
 ];
 

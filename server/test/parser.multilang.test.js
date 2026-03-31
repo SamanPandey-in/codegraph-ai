@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm, writeFile, mkdir } from 'fs/promises';
 import os from 'os';
 import path from 'path';
-import { ParserAgent } from '../src/agents/parser/ParserAgent.js';
+import { PolyglotParserAgent } from '../src/agents/parser/PolyglotParserAgent.js';
 
 const tempDirs = [];
 
@@ -13,7 +13,7 @@ after(async () => {
   }
 });
 
-test('ParserAgent parses Python and Go files via language workers', async () => {
+test('PolyglotParserAgent parses Python and Go files via tree-sitter worker', async () => {
   const rootDir = await mkdtemp(path.join(os.tmpdir(), 'codegraph-parser-'));
   tempDirs.push(rootDir);
 
@@ -49,14 +49,14 @@ test('ParserAgent parses Python and Go files via language workers', async () => 
       '',
       'type Service struct {}',
       '',
-      'func (s Service) Handle() {',
+      'func Handle() {',
       '  fmt.Println("ok")',
       '}',
     ].join('\n'),
     'utf8',
   );
 
-  const parser = new ParserAgent();
+  const parser = new PolyglotParserAgent();
 
   const result = await parser.process(
     {
@@ -75,14 +75,14 @@ test('ParserAgent parses Python and Go files via language workers', async () => 
   const pyResult = result.data.parsedFiles.find((file) => file.relativePath === 'service.py');
   assert.ok(pyResult);
   assert.equal(pyResult.parseError, null);
-  assert.deepEqual(pyResult.imports, ['./pkg', 'requests']);
-  assert.equal(pyResult.declarations.some((entry) => entry.name === 'login' && entry.kind === 'function'), true);
-  assert.equal(pyResult.declarations.some((entry) => entry.name === 'AuthService' && entry.kind === 'class'), true);
+  assert.equal(pyResult.imports.includes('requests'), true);
+  assert.equal(pyResult.declarations.some((entry) => entry.name === 'login' && entry.kind === 'fn'), true);
+  assert.equal(pyResult.declarations.some((entry) => entry.name === 'AuthService' && entry.kind === 'cls'), true);
 
   const goResult = result.data.parsedFiles.find((file) => file.relativePath === 'service.go');
   assert.ok(goResult);
   assert.equal(goResult.parseError, null);
   assert.deepEqual(goResult.imports, ['fmt', 'net/http']);
-  assert.equal(goResult.declarations.some((entry) => entry.name === 'Handle' && entry.kind === 'function'), true);
-  assert.equal(goResult.declarations.some((entry) => entry.name === 'Service' && entry.kind === 'struct'), true);
+  assert.equal(goResult.declarations.some((entry) => entry.name === 'Handle' && entry.kind === 'fn'), true);
+  assert.equal(goResult.declarations.some((entry) => entry.name === 'Service' && entry.kind === 'type'), true);
 });

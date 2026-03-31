@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
-import { pgPool } from '../../infrastructure/connections.js';
 import GitHubPRService from '../../services/GitHubPRService.js';
 import ImpactAnalysisService from '../../services/ImpactAnalysisService.js';
 
@@ -17,10 +16,20 @@ const prCommentLimiter = rateLimit({
  * When called without arguments it falls back to the production singletons.
  */
 export function createPrCommentRouter({
-  db = pgPool,
-  gitHubPRService = GitHubPRService,
+  db,
+  gitHubPRService,
 } = {}) {
   const router = Router();
+  let resolvedDb = db;
+  const resolvedGitHubPRService =
+    gitHubPRService || (typeof GitHubPRService === 'function' ? new GitHubPRService() : GitHubPRService);
+
+  async function resolveDb() {
+    if (!resolvedDb) {
+      const { pgPool } = await import('../../infrastructure/connections.js');
+      resolvedDb = pgPool;
+    }
+  }
 
   /**
    * POST /api/webhooks/github/pr-comment
@@ -38,8 +47,10 @@ export function createPrCommentRouter({
     }
 
     try {
+      await resolveDb();
+
       // Fetch job metadata and PR info
-      const jobResult = await db.query(
+      const jobResult = await resolvedDb.query(
         `
           SELECT aj.id, aj.status, aj.branch,
                  r.id as repositoryId, r.github_owner, r.github_repo,
@@ -65,7 +76,7 @@ export function createPrCommentRouter({
       }
 
       // Check if GitHub token is configured
-      if (!gitHubPRService.isConfigured()) {
+      if (!resolvedGitHubPRService.isConfigured()) {
         console.warn('GitHub token not configured, skipping PR comment');
         return res.status(200).json({ message: 'GitHub token not configured' });
       }
@@ -73,14 +84,14 @@ export function createPrCommentRouter({
       // Get PR diff
       let diff;
       try {
-        diff = await gitHubPRService.getPRDiff(owner, repo, parseInt(prNumber, 10));
+        diff = await resolvedGitHubPRService.getPRDiff(owner, repo, parseInt(prNumber, 10));
       } catch (err) {
         console.error('Failed to fetch PR diff:', err.message);
         return res.status(200).json({ message: 'Failed to fetch PR diff', error: err.message });
       }
 
       // Parse changed files from diff
-      const changedFiles = gitHubPRService.parseDiff(diff).map((f) => f.file);
+      const changedFiles = resolvedGitHubPRService.parseDiff(diff).map((f) => f.file);
 
       if (changedFiles.length === 0) {
         console.log('No changed files found in diff');
@@ -98,12 +109,16 @@ export function createPrCommentRouter({
 
       // Format impact comment
       const graphUrl = `${process.env.CLIENT_URL || 'http://localhost:5173'}/?jobId=${jobId}`;
-      const comment = gitHubPRService.formatImpactComment(changedFiles, impactedFiles, graphUrl);
+      const comment = resolvedGitHubPRService.formatImpactComment(changedFiles, impactedFiles, graphUrl);
 
       // Check if comment already exists
       let existingComment;
       try {
-        existingComment = await gitHubPRService.findExistingComment(owner, repo, parseInt(prNumber, 10));
+        existingComment = await resolvedGitHubPRService.findExistingComment(
+          owner,
+          repo,
+          parseInt(prNumber, 10),
+        );
       } catch (err) {
         console.error('Failed to find existing comment:', err.message);
       }
@@ -112,10 +127,20 @@ export function createPrCommentRouter({
       let result;
       try {
         if (existingComment) {
-          result = await gitHubPRService.updatePRComment(owner, repo, existingComment.id, comment);
+          result = await resolvedGitHubPRService.updatePRComment(
+            owner,
+            repo,
+            existingComment.id,
+            comment,
+          );
           console.log(`Updated PR comment #${existingComment.id} on ${owner}/${repo}#${prNumber}`);
         } else {
-          result = await gitHubPRService.postPRComment(owner, repo, parseInt(prNumber, 10), comment);
+          result = await resolvedGitHubPRService.postPRComment(
+            owner,
+            repo,
+            parseInt(prNumber, 10),
+            comment,
+          );
           console.log(`Posted PR comment on ${owner}/${repo}#${prNumber}`);
         }
       } catch (err) {
@@ -127,7 +152,7 @@ export function createPrCommentRouter({
       }
 
       // Log the event
-      await db.query(
+      await resolvedDb.query(
         `
           INSERT INTO audit_logs (job_id, event_type, message, metadata)
           VALUES ($1, $2, $3, $4)
@@ -170,11 +195,15 @@ export function createPrCommentRouter({
     }
 
     try {
-      if (!gitHubPRService.isConfigured()) {
+      if (!resolvedGitHubPRService.isConfigured()) {
         return res.status(503).json({ error: 'GitHub token not configured' });
       }
 
-      const existing = await gitHubPRService.findExistingComment(owner, repo, parseInt(prNumber, 10));
+      const existing = await resolvedGitHubPRService.findExistingComment(
+        owner,
+        repo,
+        parseInt(prNumber, 10),
+      );
 
       return res.json({
         hasComment: !!existing,

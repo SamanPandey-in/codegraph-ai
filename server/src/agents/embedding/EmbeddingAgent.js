@@ -1,8 +1,9 @@
-import OpenAI from 'openai';
 import { BaseAgent } from '../core/BaseAgent.js';
 import { scoreEmbedding } from '../core/confidence.js';
+import { createEmbeddingClient } from '../../services/ai/llmProvider.js';
 
-const DEFAULT_EMBEDDING_MODEL = process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small';
+const DEFAULT_EMBEDDING_MODEL =
+  process.env.AI_EMBEDDING_MODEL || process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small';
 const EMBEDDING_BATCH_SIZE = 100;
 
 function formatDeclarationNames(declarations) {
@@ -34,13 +35,9 @@ export class EmbeddingAgent extends BaseAgent {
   maxRetries = 2;
   timeoutMs = 180_000;
 
-  constructor({ openaiClient } = {}) {
+  constructor({ embeddingClient } = {}) {
     super();
-    this.openai =
-      openaiClient ||
-      (process.env.OPENAI_API_KEY
-        ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-        : null);
+    this.embeddingClient = embeddingClient || createEmbeddingClient();
     this.model = DEFAULT_EMBEDDING_MODEL;
   }
 
@@ -66,13 +63,13 @@ export class EmbeddingAgent extends BaseAgent {
       });
     }
 
-    if (!this.openai) {
+    if (!this.embeddingClient.isConfigured()) {
       return this.buildResult({
         jobId: context?.jobId,
         status: 'failed',
         confidence: 0,
         data: {},
-        errors: [{ code: 500, message: 'OPENAI_API_KEY is missing for EmbeddingAgent.' }],
+        errors: [{ code: 500, message: 'Embedding provider is not configured for EmbeddingAgent.' }],
         warnings,
         metrics: {
           attempted: entries.length,
@@ -98,7 +95,7 @@ export class EmbeddingAgent extends BaseAgent {
       const batch = payload.slice(idx, idx + EMBEDDING_BATCH_SIZE);
 
       try {
-        const response = await this.openai.embeddings.create({
+        const response = await this.embeddingClient.createEmbedding({
           model: this.model,
           input: batch.map((item) => item.text),
         });

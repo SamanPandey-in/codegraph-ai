@@ -5,15 +5,22 @@ import {
   validateBranchQuery,
   validateLocalPathBody,
   validatePublicRepoBody,
+  validateRepoBrowserQuery,
+  validateRepoFileQuery,
+  validateRepoFileUpdateBody,
 } from '../middleware/validate.middleware.js';
 import {
   analyzeController,
   browseLocalPathController,
+  getRepositoryFileController,
   listAnalysisHistoryController,
   listBranchesController,
+  listRepositoryDirectoryController,
+  listRepositoryStructureController,
   listOwnedReposController,
   localPickerCapabilitiesController,
   resolvePublicRepoController,
+  updateRepositoryFileController,
   validateLocalPathController,
 } from '../controllers/analyze.controller.js';
 
@@ -35,5 +42,9 @@ router.post('/local/validate', analyzeLimiter, validateLocalPathBody, validateLo
 router.post('/github/public/resolve', analyzeLimiter, validatePublicRepoBody, resolvePublicRepoController);
 router.get('/github/repos', analyzeLimiter, listOwnedReposController);
 router.get('/github/branches', analyzeLimiter, validateBranchQuery, listBranchesController);
+router.get('/github/structure', analyzeLimiter, validateRepoBrowserQuery, listRepositoryStructureController);
+router.get('/github/contents', analyzeLimiter, validateRepoBrowserQuery, listRepositoryDirectoryController);
+router.get('/github/file', analyzeLimiter, validateRepoFileQuery, getRepositoryFileController);
+router.put('/github/file', analyzeLimiter, validateRepoFileUpdateBody, updateRepositoryFileController);
 
 export default router;

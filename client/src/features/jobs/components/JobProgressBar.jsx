@@ -31,29 +31,37 @@ export default function JobProgressBar({ job }) {
   const agentTrace = Array.isArray(job?.agentTrace) ? job.agentTrace : [];
 
   return (
-    <section className="rounded-xl border border-primary/30 bg-primary/5 p-4 shadow-sm">
-      <div className="flex items-center gap-2 text-sm">
-        <span className="text-base leading-none">{info.icon}</span>
-        <p className="font-medium text-foreground">{info.label}</p>
-        {overallConfidence !== null && (
-          <p className="ml-auto text-xs text-muted-foreground">
-            Confidence: {(overallConfidence * 100).toFixed(0)}%
+    <section className="rounded-2xl shadow-neu-inset border-none bg-background/50 p-6 animate-in fade-in zoom-in duration-500">
+      <div className="flex items-center gap-3 text-sm">
+        <div className="flex size-8 items-center justify-center rounded-xl shadow-neu-inset border-none bg-background/60 font-black text-gold/80">
+          {info.icon}
+        </div>
+        <div>
+          <p className="font-bold tracking-tight text-foreground/90">{info.label}</p>
+          <p className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground/40 mt-0.5">
+            Stage: {stage}
           </p>
+        </div>
+        {overallConfidence !== null && (
+          <div className="ml-auto text-right">
+            <p className="text-xl font-display font-black tracking-tighter text-gold/80 leading-none">
+              {(overallConfidence * 100).toFixed(0)}%
+            </p>
+            <p className="text-[9px] uppercase font-bold tracking-tighter text-muted-foreground/30 mt-1">
+              Confidence
+            </p>
+          </div>
         )}
       </div>
 
-      <div className="mt-1 text-xs text-muted-foreground">
-        Stage: {stage}
-      </div>
-
       {Number.isFinite(job?.fileCount) && (
-        <div className="mt-1 text-xs text-muted-foreground">
-          Files scanned: {job.fileCount}
+        <div className="mt-4 flex items-center justify-between text-[10px] uppercase font-bold tracking-[0.2em] text-muted-foreground/40">
+          <span>Files scanned: {job.fileCount}</span>
         </div>
       )}
 
       {agentTrace.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1.5">
+        <div className="mt-4 flex flex-wrap gap-2">
           {agentTrace.map((result, index) => {
             const confidence = Number(result?.confidence);
             const score = Number.isFinite(confidence) ? confidence : 0;
@@ -68,9 +76,9 @@ export default function JobProgressBar({ job }) {
             return (
               <span
                 key={result?.agentId || `${label}-${index}`}
-                className={`rounded-full border px-2 py-0.5 text-[10px] ${confidenceClass(score)}`}
+                className={`rounded-xl px-3 py-1.5 text-[9px] font-bold uppercase tracking-widest shadow-neu-inset border-none bg-background/40 ${confidenceClass(score)}`}
               >
-                {label} {pct}%
+                {label} <span className="opacity-40 mx-1">|</span> {pct}%
               </span>
             );
           })}

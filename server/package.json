@@ -9,9 +9,9 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "migrate": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/001_initial.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/002_function_nodes.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/003_share_tokens.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/004_analysis_jobs_metadata.sql",
+    "migrate": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/001_initial.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/002_function_nodes.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/003_share_tokens.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/004_analysis_jobs_metadata.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/006_contracts.sql",
     "db:migrate": "npm run migrate",
-    "test": "node --test test/ai.queries.test.js test/github.webhook.test.js test/parser.multilang.test.js test/pr-comment.test.js",
+    "test": "node --test test/ai.queries.test.js test/ai.snippet-impact.test.js test/ai.suggest-refactor.test.js test/graph.heatmap.test.js test/github.webhook.test.js test/parser.multilang.test.js test/pr-comment.test.js test/snippet.analyzer.confidence.test.js",
     "test:ai-queries": "node --test test/ai.queries.test.js",
     "test:unit": "vitest run --configLoader native --pool threads",
     "test:coverage": "vitest run --coverage --configLoader native --pool threads"
@@ -37,7 +37,9 @@
     "passport-github2": "^0.1.12",
     "passport-jwt": "^4.0.1",
     "pg": "^8.20.0",
-    "pgvector": "^0.2.1"
+    "pgvector": "^0.2.1",
+    "tree-sitter-wasms": "^0.1.13",
+    "web-tree-sitter": "^0.25.10"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.0.8",

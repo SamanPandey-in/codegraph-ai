@@ -1,8 +1,9 @@
 import { IngestionAgent } from '../ingestion/IngestionAgent.js';
 import { ScannerAgent } from '../scanner/ScannerAgent.js';
-import { ParserAgent } from '../parser/ParserAgent.js';
+import { PolyglotParserAgent } from '../parser/PolyglotParserAgent.js';
 import { GraphBuilderAgent } from '../graph/GraphBuilderAgent.js';
 import { EnrichmentAgent } from '../enrichment/EnrichmentAgent.js';
+import { ContractInferenceAgent } from '../enrichment/ContractInferenceAgent.js';
 import { EmbeddingAgent } from '../embedding/EmbeddingAgent.js';
 import { PersistenceAgent } from '../persistence/PersistenceAgent.js';
 import { AuditLogger } from './AuditLogger.js';
@@ -28,9 +29,10 @@ export class SupervisorAgent {
     this.agents = {
       ingestion: new IngestionAgent(),
       scanner: new ScannerAgent(),
-      parser: new ParserAgent(),
+      parser: new PolyglotParserAgent(),
       graphBuilder: new GraphBuilderAgent(),
       enrichment: new EnrichmentAgent(),
+      contractInference: new ContractInferenceAgent(),
       embedding: new EmbeddingAgent(),
       persistence: new PersistenceAgent({ db }),
     };
@@ -92,6 +94,16 @@ export class SupervisorAgent {
       agentTrace.push(enrichmentResult);
       Object.assign(pipelineData, enrichmentResult.data);
 
+      await this._updateJobStatus(jobId, 'inferring-contracts');
+      const contractResult = await this._runWithSupervision(
+        this.agents.contractInference,
+        { graph: pipelineData.graph, extractedPath: pipelineData.extractedPath },
+        context,
+        { abortOnCritical: false },
+      );
+      agentTrace.push(contractResult);
+      Object.assign(pipelineData, contractResult.data);
+
       await this._updateJobStatus(jobId, 'embedding');
       const embeddingResult = await this._runWithSupervision(
         this.agents.embedding,
@@ -116,6 +128,7 @@ export class SupervisorAgent {
           edges: pipelineData.edges,
           functionNodes: pipelineData.functionNodes,
           enriched: pipelineData.enriched,
+          contracts: pipelineData.contracts,
           embeddings: pipelineData.embeddings,
           topology: pipelineData.topology,
         },
@@ -325,6 +338,7 @@ export class SupervisorAgent {
       const prNumber = input?.github?.prNumber;
       const owner = input?.github?.owner;
       const repo = input?.github?.repo;
+      const sha = input?.github?.headSha;
 
       if (!prNumber || !owner || !repo) return;
       if (!GitHubPRService.isConfigured()) {
@@ -359,6 +373,17 @@ export class SupervisorAgent {
       }
 
       console.log(`[SupervisorAgent] PR comment posted to ${owner}/${repo}#${prNumber}`);
+
+      // Create a check run for PR status
+      if (sha) {
+        const conclusion = impactedFiles.size > 10 ? 'failure' : 'neutral';
+        await GitHubPRService.createCheckRun(owner, repo, sha, {
+          conclusion,
+          title: `${impactedFiles.size} files potentially impacted`,
+          summary: `${changedFiles.length} changed files affect ${impactedFiles.size} dependent files.`,
+          detailsUrl: graphUrl,
+        });
+      }
     } catch (err) {
       // PR comment failure must never abort the main pipeline.
       console.error('[SupervisorAgent] Failed to post PR comment:', err.message);
