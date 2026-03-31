@@ -1,0 +1,10 @@
+.git
+node_modules
+dist/**/*.map
+src/**
+**/*.ts
+**/*.md
+tsconfig.json
+.prettierrc
+.eslintignore
+.eslintrc.json

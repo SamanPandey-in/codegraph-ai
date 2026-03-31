@@ -1,0 +1,54 @@
+{
+  "name": "codegraph-ai",
+  "displayName": "CodeGraph AI",
+  "description": "Visualize your codebase dependencies and impact analysis directly in VS Code",
+  "version": "0.0.1",
+  "publisher": "codegraph",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Visualization",
+    "Developer Tools"
+  ],
+  "activationEvents": [
+    "workspaceContains:**/*.{js,ts,jsx,tsx,py,go}"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "codegraphAi.openGraph",
+        "title": "CodeGraph AI: Open Graph"
+      }
+    ],
+    "configuration": {
+      "title": "CodeGraph AI",
+      "properties": {
+        "codegraphAi.serverUrl": {
+          "type": "string",
+          "default": "http://localhost:5000",
+          "description": "CodeGraph AI server URL"
+        },
+        "codegraphAi.apiToken": {
+          "type": "string",
+          "default": "",
+          "description": "JWT token for authentication with CodeGraph AI server"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run esbuild-base -- --minify",
+    "esbuild-base": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
+    "esbuild": "npm run esbuild-base -- --sourcemap",
+    "esbuild-watch": "npm run esbuild-base -- --sourcemap --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.19.0",
+    "typescript": "^5.3.0"
+  }
+}
