@@ -3,6 +3,7 @@ import path from 'path';
 import crypto from 'crypto';
 import pLimit from 'p-limit';
 import { BaseAgent } from '../core/BaseAgent.js';
+import { scoreContractInference } from '../core/confidence.js';
 import { createChatClient } from '../../services/ai/llmProvider.js';
 import { redisClient } from '../../infrastructure/connections.js';
 
@@ -177,7 +178,7 @@ export class ContractInferenceAgent extends BaseAgent {
       ),
     );
 
-    const confidence = attempted === 0 ? 0.5 : succeeded / Math.max(attempted, 1);
+    const confidence = scoreContractInference({ succeeded, attempted });
 
     return this.buildResult({
       jobId: context?.jobId,

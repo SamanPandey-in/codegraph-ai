@@ -9,7 +9,7 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "migrate": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/001_initial.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/002_function_nodes.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/003_share_tokens.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/004_analysis_jobs_metadata.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/006_contracts.sql",
+    "migrate": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/001_initial.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/002_function_nodes.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/003_share_tokens.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/004_analysis_jobs_metadata.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/005_polyglot_statuses.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/006_contracts.sql",
     "db:migrate": "npm run migrate",
     "test": "node --test test/ai.queries.test.js test/ai.snippet-impact.test.js test/ai.suggest-refactor.test.js test/graph.heatmap.test.js test/github.webhook.test.js test/parser.multilang.test.js test/pr-comment.test.js test/snippet.analyzer.confidence.test.js",
     "test:ai-queries": "node --test test/ai.queries.test.js",
@@ -31,6 +31,7 @@
     "express-rate-limit": "^7.1.5",
     "ioredis": "^5.10.1",
     "jsonwebtoken": "^9.0.3",
+    "neo4j-driver": "^5.28.1",
     "openai": "^6.33.0",
     "p-limit": "^5.0.0",
     "passport": "^0.7.0",

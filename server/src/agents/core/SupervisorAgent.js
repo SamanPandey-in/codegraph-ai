@@ -2,6 +2,8 @@ import { IngestionAgent } from '../ingestion/IngestionAgent.js';
 import { ScannerAgent } from '../scanner/ScannerAgent.js';
 import { PolyglotParserAgent } from '../parser/PolyglotParserAgent.js';
 import { GraphBuilderAgent } from '../graph/GraphBuilderAgent.js';
+import { RelationshipExtractorAgent } from '../graph/RelationshipExtractorAgent.js';
+import { Neo4jSeedAgent } from '../graph/Neo4jSeedAgent.js';
 import { EnrichmentAgent } from '../enrichment/EnrichmentAgent.js';
 import { ContractInferenceAgent } from '../enrichment/ContractInferenceAgent.js';
 import { EmbeddingAgent } from '../embedding/EmbeddingAgent.js';
@@ -31,9 +33,11 @@ export class SupervisorAgent {
       scanner: new ScannerAgent(),
       parser: new PolyglotParserAgent(),
       graphBuilder: new GraphBuilderAgent(),
+      relationshipExtractor: new RelationshipExtractorAgent(),
       enrichment: new EnrichmentAgent(),
       contractInference: new ContractInferenceAgent(),
       embedding: new EmbeddingAgent(),
+      neo4jSeed: new Neo4jSeedAgent(),
       persistence: new PersistenceAgent({ db }),
     };
   }
@@ -81,6 +85,20 @@ export class SupervisorAgent {
       if (graphResult.status === 'failed') return this._abort(jobId, graphResult, agentTrace);
       Object.assign(pipelineData, graphResult.data);
 
+      await this._updateJobStatus(jobId, 'extracting-relationships');
+      const relationshipResult = await this._runWithSupervision(
+        this.agents.relationshipExtractor,
+        {
+          graph: pipelineData.graph,
+          functionNodes: pipelineData.functionNodes,
+          extractedPath: pipelineData.extractedPath,
+        },
+        context,
+        { abortOnCritical: false },
+      );
+      agentTrace.push(relationshipResult);
+      Object.assign(pipelineData, relationshipResult.data);
+
       await this._updateJobStatus(jobId, 'enriching');
       const enrichmentResult = await this._runWithSupervision(
         this.agents.enrichment,
@@ -118,6 +136,20 @@ export class SupervisorAgent {
       agentTrace.push(embeddingResult);
       Object.assign(pipelineData, embeddingResult.data);
 
+      await this._updateJobStatus(jobId, 'seeding-neo4j');
+      const neo4jResult = await this._runWithSupervision(
+        this.agents.neo4jSeed,
+        {
+          jobId,
+          typedEdges: pipelineData.typedEdges || [],
+          graph: pipelineData.graph,
+        },
+        context,
+        { abortOnCritical: false },
+      );
+      agentTrace.push(neo4jResult);
+      Object.assign(pipelineData, neo4jResult.data);
+
       await this._updateJobStatus(jobId, 'persisting');
       const persistenceResult = await this._runWithSupervision(
         this.agents.persistence,
@@ -125,6 +157,7 @@ export class SupervisorAgent {
           jobId,
           repositoryId: input?.repositoryId,
           graph: pipelineData.graph,
+          typedEdges: pipelineData.typedEdges,
           edges: pipelineData.edges,
           functionNodes: pipelineData.functionNodes,
           enriched: pipelineData.enriched,

@@ -3,12 +3,15 @@ import {
   computeOverallConfidence,
   decideConfidence,
   labelConfidence,
+  scoreContractInference,
   scoreEmbedding,
   scoreEnrichment,
   scoreGraphBuilder,
   scoreIngestion,
+  scoreNeo4jSeed,
   scoreParser,
   scorePersistence,
+  scoreRelationshipExtractor,
   scoreScanner,
 } from '../confidence.js';
 
@@ -83,5 +86,12 @@ describe('confidence helpers', () => {
 
     expect(scoreEmbedding({ attempted: 10, succeeded: 9 })).toBe(0.9);
     expect(scorePersistence({ recordsAttempted: 20, recordsWritten: 20 })).toBe(1);
+  });
+
+  it('computes relationship, contract, and neo4j scorer outputs', () => {
+    expect(scoreRelationshipExtractor({ filesWithEdges: 5, totalFiles: 10 })).toBe(0.7);
+    expect(scoreContractInference({ succeeded: 3, attempted: 4 })).toBe(0.75);
+    expect(scoreContractInference({ succeeded: 0, attempted: 0 })).toBe(0.5);
+    expect(scoreNeo4jSeed({ edgesCreated: 80, totalEdges: 100, failedEdges: 20 })).toBe(0.64);
   });
 });
