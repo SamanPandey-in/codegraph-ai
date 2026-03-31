@@ -69,7 +69,7 @@ export default function LoginPage() {
                 >
                   {demoLoading ? 'Authenticating...' : 'Sign in as Demo User'}
                 </Button>
-                
+
                 <div className="rounded-2xl bg-background/60 shadow-neu-inset border-none p-4 text-[10px] text-center">
                   <span className="uppercase font-black tracking-widest text-muted-foreground/60 block mb-1">Development Mode</span>
                   <span className="text-foreground/70 font-mono tracking-tight font-bold">
@@ -86,7 +86,7 @@ export default function LoginPage() {
             {' '}and{' '}
             <Link to="/privacy" className="text-gold font-bold hover:underline underline-offset-4">Privacy Policy</Link>
           </p>
-          
+
           <p className="mt-4 text-center text-sm">
             <span className="text-muted-foreground font-medium">Don't have an account? </span>
             <Link to="/signup" className="text-gold font-black hover:underline underline-offset-4">Sign Up</Link>
@@ -94,13 +94,13 @@ export default function LoginPage() {
         </div>
 
         {/* Right Side: Visual Accent */}
-        <div className="hidden lg:flex flex-col justify-end w-1/2 bg-black/40 backdrop-blur-md p-16 relative overflow-hidden animate-in fade-in slide-in-from-right-8 duration-1000">
+        <div className="hidden lg:flex flex-col justify-end w-1/2 bg-[rgb(var(--auth-panel))] p-16 relative overflow-hidden animate-in fade-in slide-in-from-right-8 duration-1000">
           {/* Abstract Gold Art */}
           <div className="absolute inset-0 opacity-40">
             <div className="absolute top-[-10%] right-[-10%] size-[500px] rounded-full bg-gold/5 blur-[120px] animate-pulse" />
             <div className="absolute bottom-[-20%] left-[-10%] size-[400px] rounded-full bg-gold/5 blur-[100px]" />
           </div>
-          
+
           <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-5" />
 
           <div className="relative z-10 space-y-6">
@@ -115,7 +115,7 @@ export default function LoginPage() {
                 Join the elite engineers using visual intelligence to master complex architectures.
               </p>
             </div>
-            
+
             <div className="pt-10 flex items-center gap-6">
               <div className="flex -space-x-3">
                 {[1, 2, 3, 4].map(i => (

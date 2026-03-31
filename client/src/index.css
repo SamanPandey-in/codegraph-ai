@@ -6,9 +6,12 @@
 @layer base {
   :root {
     /* Refined for Neumorphism - subtle mid-tones */
-    --background: 240 242 245;     /* #F0F2F5 */
-    --foreground: 30 41 59;        /* #1E293B */
-    --card: 240 242 245;           /* Same as background for neumorphism */
+    --background: 240 242 245;
+    /* #F0F2F5 */
+    --foreground: 30 41 59;
+    /* #1E293B */
+    --card: 240 242 245;
+    /* Same as background for neumorphism */
     --card-foreground: 30 41 59;
     --popover: 255 255 255;
     --popover-foreground: 30 41 59;
@@ -16,18 +19,22 @@
     --primary-foreground: 255 255 255;
     --secondary: 100 116 139;
     --secondary-foreground: 248 250 252;
-    --muted: 226 232 240;          /* #E2E8F0 */
+    --muted: 226 232 240;
+    /* #E2E8F0 */
     --muted-foreground: 100 116 139;
     --accent: 212 175 55;
     --accent-foreground: 30 41 59;
     --border: 210 214 220;
     --input: 240 242 245;
     --ring: 212 175 55;
-    --radius: 1rem;                /* Rounder for neumorphism */
+    --auth-panel: 11 11 11;
+    --radius: 1rem;
+    /* Rounder for neumorphism */
   }
 
   .dark {
-    --background: 15 15 15;        /* Deep Black */
+    --background: 15 15 15;
+    /* Deep Black */
     --foreground: 241 245 249;
     --card: 15 15 15;
     --card-foreground: 241 245 249;
@@ -44,6 +51,7 @@
     --border: 38 38 38;
     --input: 15 15 15;
     --ring: 212 175 55;
+    --auth-panel: 11 11 11;
   }
 }
 
@@ -58,11 +66,11 @@
   --color-muted-foreground: rgb(var(--muted-foreground));
   --color-border: rgb(var(--border));
   --color-gold: #D4AF37;
-  
+
   --font-sans: 'Outfit', sans-serif;
   --font-display: 'Sora', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
-  
+
   --radius-xl: 1rem;
   --radius-2xl: 1.5rem;
 }
@@ -71,6 +79,7 @@
   * {
     border-color: rgb(var(--border));
   }
+
   body {
     background-color: rgb(var(--background));
     color: rgb(var(--foreground));
@@ -137,6 +146,7 @@
   .shadow-neu-inset {
     box-shadow: inset 2px 2px 5px rgba(0, 0, 0, 0.05), inset -2px -2px 5px rgba(255, 255, 255, 0.7);
   }
+
   .dark .shadow-neu-inset {
     box-shadow: inset 2px 2px 5px rgba(0, 0, 0, 0.3), inset -1px -1px 3px rgba(255, 255, 255, 0.03);
   }
@@ -144,17 +154,18 @@
   .shadow-neu-flat {
     box-shadow: 4px 4px 8px rgba(0, 0, 0, 0.05), -4px -4px 8px rgba(255, 255, 255, 0.8);
   }
+
   .dark .shadow-neu-flat {
     box-shadow: 4px 4px 8px rgba(0, 0, 0, 0.3), -2px -2px 4px rgba(255, 255, 255, 0.02);
   }
-  
+
   .glass-premium {
     background: rgba(var(--background) / 0.6);
     backdrop-filter: blur(12px) saturate(180%);
     -webkit-backdrop-filter: blur(12px) saturate(180%);
     border: 1px solid rgba(255, 255, 255, 0.12);
   }
-  
+
   .text-gradient-gold {
     background: linear-gradient(135deg, #D4AF37 0%, #F1D382 50%, #D4AF37 100%);
     -webkit-background-clip: text;
@@ -170,6 +181,7 @@
   }
 
   /* Active Scale Utility */
+
   .active-scale:active {
     transform: scale(0.97);
   }

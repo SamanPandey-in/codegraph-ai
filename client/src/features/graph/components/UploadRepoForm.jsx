@@ -51,11 +51,10 @@ function SourceToggle({ value, onChange, disabled }) {
     <div className="grid grid-cols-2 gap-2 rounded-xl shadow-neu-inset border-none bg-background/40 p-1.5 transition-all duration-300">
       <button
         type="button"
-        className={`rounded-lg px-4 py-2.5 text-sm font-bold tracking-tight transition-all duration-300 active:scale-[0.98] ${
-          value === 'local'
+        className={`rounded-lg px-4 py-2.5 text-sm font-bold tracking-tight transition-all duration-300 active:scale-[0.98] ${value === 'local'
             ? 'bg-background shadow-neu-flat text-foreground'
             : 'text-muted-foreground/60 hover:text-foreground hover:bg-background/20'
-        }`}
+          }`}
         disabled={disabled}
         onClick={() => onChange('local')}
       >
@@ -63,11 +62,10 @@ function SourceToggle({ value, onChange, disabled }) {
       </button>
       <button
         type="button"
-        className={`rounded-lg px-4 py-2.5 text-sm font-bold tracking-tight transition-all duration-300 active:scale-[0.98] ${
-          value === 'github'
+        className={`rounded-lg px-4 py-2.5 text-sm font-bold tracking-tight transition-all duration-300 active:scale-[0.98] ${value === 'github'
             ? 'bg-background shadow-neu-flat text-foreground'
             : 'text-muted-foreground/60 hover:text-foreground hover:bg-background/20'
-        }`}
+          }`}
         disabled={disabled}
         onClick={() => onChange('github')}
       >
@@ -82,11 +80,10 @@ function GitHubModeToggle({ value, onChange, disabled }) {
     <div className="grid grid-cols-2 gap-2 rounded-xl shadow-neu-inset border-none bg-background/40 p-1.5 transition-all duration-300">
       <button
         type="button"
-        className={`rounded-lg px-4 py-2.5 text-sm font-bold tracking-tight transition-all duration-300 active:scale-[0.98] ${
-          value === 'public'
+        className={`rounded-lg px-4 py-2.5 text-sm font-bold tracking-tight transition-all duration-300 active:scale-[0.98] ${value === 'public'
             ? 'bg-background shadow-neu-flat text-foreground'
             : 'text-muted-foreground/60 hover:text-foreground hover:bg-background/20'
-        }`}
+          }`}
         disabled={disabled}
         onClick={() => onChange('public')}
       >
@@ -94,11 +91,10 @@ function GitHubModeToggle({ value, onChange, disabled }) {
       </button>
       <button
         type="button"
-        className={`rounded-lg px-4 py-2.5 text-sm font-bold tracking-tight transition-all duration-300 active:scale-[0.98] ${
-          value === 'owned'
+        className={`rounded-lg px-4 py-2.5 text-sm font-bold tracking-tight transition-all duration-300 active:scale-[0.98] ${value === 'owned'
             ? 'bg-background shadow-neu-flat text-foreground'
             : 'text-muted-foreground/60 hover:text-foreground hover:bg-background/20'
-        }`}
+          }`}
         disabled={disabled}
         onClick={() => onChange('owned')}
       >
@@ -155,7 +151,7 @@ export default function UploadRepoForm() {
     if (!reanalyzeConfig) return;
 
     const { source: configSource, owner, repo, branch, fullName } = reanalyzeConfig;
-    
+
     if (configSource === 'local') {
       // Re-analyzing local repository
       setSource('local');
@@ -168,7 +164,7 @@ export default function UploadRepoForm() {
       // Default to 'owned' mode since we have owner and repo available
       setSource('github');
       setGitHubMode('owned');
-      
+
       if (owner && repo) {
         // Pre-populate with the repo data
         // This allows the form to show selected repo while still allowing branch selection
@@ -179,7 +175,7 @@ export default function UploadRepoForm() {
           fullName: fullName || `${owner}/${repo}`,
           defaultBranch: branch || 'main',
         });
-        
+
         if (branch) {
           setOwnedBranch(branch);
           // Also populate ownedBranches with at least the current branch
@@ -209,18 +205,18 @@ export default function UploadRepoForm() {
     if (githubMode === 'public') {
       return Boolean(
         publicRepoUrl.trim() &&
-          publicRepoInfo &&
-          publicBranch &&
-          !publicLoading,
+        publicRepoInfo &&
+        publicBranch &&
+        !publicLoading,
       );
     }
 
     return Boolean(
       isAuthenticated &&
-        !ownedAuthRequired &&
-        selectedOwnedRepo &&
-        ownedBranch &&
-        !ownedBranchesLoading,
+      !ownedAuthRequired &&
+      selectedOwnedRepo &&
+      ownedBranch &&
+      !ownedBranchesLoading,
     );
   }, [
     source,
@@ -553,9 +549,9 @@ export default function UploadRepoForm() {
         timedOut
           ? 'Folder picker did not open in time. Please try Browse again. If it still fails, paste an absolute path manually.'
           : toErrorMessage(
-              err,
-              'Could not open native folder picker. Please paste the absolute path manually.',
-            ),
+            err,
+            'Could not open native folder picker. Please paste the absolute path manually.',
+          ),
       );
     } finally {
       setLocalBrowseLoading(false);
@@ -852,11 +848,10 @@ export default function UploadRepoForm() {
                               type="button"
                               onClick={() => handleOwnedRepoSelect(repo)}
                               disabled={isLoading}
-                              className={`flex flex-col items-start gap-0.5 rounded-xl px-4 py-3 text-left transition-all active-scale ${
-                                selectedOwnedRepo?.id === repo.id
+                              className={`flex flex-col items-start gap-0.5 rounded-xl px-4 py-3 text-left transition-all active-scale ${selectedOwnedRepo?.id === repo.id
                                   ? 'bg-background shadow-neu-flat text-foreground'
                                   : 'text-muted-foreground hover:bg-background/20 hover:text-foreground'
-                              }`}
+                                }`}
                             >
                               <span className="text-sm font-bold tracking-tight">{repo.name}</span>
                               <span className="text-[10px] opacity-60">{repo.fullName}</span>

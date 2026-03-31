@@ -739,178 +739,176 @@ export default function AnalyzeFilePage() {
       {selectedFilePath && (
         <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(21rem,1fr)]">
           <div className="rounded-2xl shadow-neu-inset border-none bg-background/40">
-          <div className="flex items-center justify-between gap-3 border-b border-border/10 px-5 py-4">
-            <div className="min-w-0">
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60">File</p>
-              <p className="truncate text-sm font-display font-bold tracking-tight">{selectedFilePath}</p>
-              <p className="mt-1 text-[11px] text-muted-foreground/80">
-                Select code to analyze. Ctrl/Cmd+Enter runs snippet analysis.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <div className="hidden xl:flex items-center gap-2 rounded-xl border border-border/50 bg-background/55 p-1 shadow-neu-inset">
-                <div className="inline-flex items-center rounded-lg border border-border/60 bg-background/70 p-0.5">
-                  <button
-                    type="button"
-                    onClick={() => setIsAutoSnippetAnalyze(true)}
-                    className={`rounded-md px-2.5 py-1 text-[10px] font-semibold tracking-wide transition-colors ${
-                      isAutoSnippetAnalyze
-                        ? 'bg-primary/12 text-primary'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    Auto
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsAutoSnippetAnalyze(false)}
-                    className={`rounded-md px-2.5 py-1 text-[10px] font-semibold tracking-wide transition-colors ${
-                      !isAutoSnippetAnalyze
-                        ? 'bg-primary/12 text-primary'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    Manual
-                  </button>
-                </div>
-
-                <span className="inline-flex items-center gap-1.5 rounded-lg border border-border/60 bg-background/70 px-2 py-1 text-[10px] text-muted-foreground">
-                  <span className={`size-1.5 rounded-full ${snippetStatusMeta.dotClass}`} />
-                  {snippetStatusMeta.label}
-                </span>
-
-                {!isAutoSnippetAnalyze && (
-                  <Button
-                    size="sm"
-                    type="button"
-                    onClick={handleManualSnippetAnalyze}
-                    disabled={!snippetState.selectedSnippet || snippetState.status === 'loading'}
-                    className="h-7 rounded-lg bg-gold px-2.5 text-[10px] text-white"
-                  >
-                    {snippetState.status === 'loading' ? 'Analyzing...' : 'Analyze'}
-                  </Button>
-                )}
+            <div className="flex items-center justify-between gap-3 border-b border-border/10 px-5 py-4">
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60">File</p>
+                <p className="truncate text-sm font-display font-bold tracking-tight">{selectedFilePath}</p>
+                <p className="mt-1 text-[11px] text-muted-foreground/80">
+                  Select code to analyze. Ctrl/Cmd+Enter runs snippet analysis.
+                </p>
               </div>
 
-              {!isEditing ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setIsEditing(true)}
-                  disabled={!fileState.canEdit || fileState.status === 'loading'}
-                  className="rounded-xl shadow-neu-inset border-none bg-background/50 active-scale"
-                >
-                  <Edit3 className="size-3.5" />
-                  Edit
-                </Button>
-              ) : (
-                <>
+              <div className="flex items-center gap-2">
+                <div className="hidden xl:flex items-center gap-2 rounded-xl border border-border/50 bg-background/55 p-1 shadow-neu-inset">
+                  <div className="inline-flex items-center rounded-lg border border-border/60 bg-background/70 p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setIsAutoSnippetAnalyze(true)}
+                      className={`rounded-md px-2.5 py-1 text-[10px] font-semibold tracking-wide transition-colors ${isAutoSnippetAnalyze
+                          ? 'bg-primary/12 text-primary'
+                          : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                    >
+                      Auto
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsAutoSnippetAnalyze(false)}
+                      className={`rounded-md px-2.5 py-1 text-[10px] font-semibold tracking-wide transition-colors ${!isAutoSnippetAnalyze
+                          ? 'bg-primary/12 text-primary'
+                          : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                    >
+                      Manual
+                    </button>
+                  </div>
+
+                  <span className="inline-flex items-center gap-1.5 rounded-lg border border-border/60 bg-background/70 px-2 py-1 text-[10px] text-muted-foreground">
+                    <span className={`size-1.5 rounded-full ${snippetStatusMeta.dotClass}`} />
+                    {snippetStatusMeta.label}
+                  </span>
+
+                  {!isAutoSnippetAnalyze && (
+                    <Button
+                      size="sm"
+                      type="button"
+                      onClick={handleManualSnippetAnalyze}
+                      disabled={!snippetState.selectedSnippet || snippetState.status === 'loading'}
+                      className="h-7 rounded-lg bg-gold px-2.5 text-[10px] text-white"
+                    >
+                      {snippetState.status === 'loading' ? 'Analyzing...' : 'Analyze'}
+                    </Button>
+                  )}
+                </div>
+
+                {!isEditing ? (
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => {
-                      setEditorValue(fileState.data?.content || '');
-                      setIsEditing(false);
-                    }}
+                    onClick={() => setIsEditing(true)}
+                    disabled={!fileState.canEdit || fileState.status === 'loading'}
                     className="rounded-xl shadow-neu-inset border-none bg-background/50 active-scale"
                   >
-                    <X className="size-3.5" />
-                    Cancel
+                    <Edit3 className="size-3.5" />
+                    Edit
                   </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleSaveFile}
-                    disabled={!hasUnsavedChanges || fileState.saveStatus === 'loading'}
-                    className="rounded-xl bg-gold text-white shadow-md active-scale"
-                  >
-                    <Save className="size-3.5" />
-                    {fileState.saveStatus === 'loading' ? 'Saving...' : 'Save'}
-                  </Button>
-                </>
-              )}
+                ) : (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setEditorValue(fileState.data?.content || '');
+                        setIsEditing(false);
+                      }}
+                      className="rounded-xl shadow-neu-inset border-none bg-background/50 active-scale"
+                    >
+                      <X className="size-3.5" />
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleSaveFile}
+                      disabled={!hasUnsavedChanges || fileState.saveStatus === 'loading'}
+                      className="rounded-xl bg-gold text-white shadow-md active-scale"
+                    >
+                      <Save className="size-3.5" />
+                      {fileState.saveStatus === 'loading' ? 'Saving...' : 'Save'}
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
 
-          {fileState.status === 'loading' && (
-            <div className="px-4 py-6 text-sm text-muted-foreground">Loading file content...</div>
-          )}
+            {fileState.status === 'loading' && (
+              <div className="px-4 py-6 text-sm text-muted-foreground">Loading file content...</div>
+            )}
 
-          {fileState.status === 'failed' && fileState.error && (
-            <div className="m-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              {fileState.error}
-            </div>
-          )}
+            {fileState.status === 'failed' && fileState.error && (
+              <div className="m-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {fileState.error}
+              </div>
+            )}
 
-          {fileState.status === 'succeeded' && fileState.data && (
-            <div className="p-4">
-              {isEditing ? (
-                <div className="flex rounded-2xl shadow-neu-inset border-none bg-background/60 overflow-x-auto custom-scrollbar">
-                  <div className="flex min-w-full">
-                    <pre
-                      ref={editorGutterRef}
-                      aria-hidden="true"
-                      className="sticky left-0 z-10 w-14 shrink-0 border-r border-border/10 bg-background/20 px-2 py-3 text-right font-mono text-xs leading-5 text-muted-foreground/60"
-                    >
-                      {Array.from({ length: editorLineCount }, (_, i) => i + 1).join('\n')}
-                    </pre>
-                    <textarea
-                      ref={editorTextareaRef}
-                      value={editorValue}
-                      onChange={(e) => setEditorValue(e.target.value)}
-                      onSelect={handleTextareaSelection}
-                      onKeyUp={handleTextareaSelection}
-                      onMouseUp={handleTextareaSelection}
-                      spellCheck={false}
-                      rows={editorLineCount}
-                      className="min-w-max flex-1 resize-none bg-transparent px-3 py-3 font-mono text-xs leading-5 outline-none whitespace-pre overflow-hidden text-foreground/90"
-                    />
-                  </div>
-                </div>
-              ) : (
-                <div className="flex rounded-2xl shadow-neu-inset border-none bg-background/60 overflow-x-auto custom-scrollbar">
-                  <div className="flex min-w-full">
-                    <pre
-                      ref={viewerGutterRef}
-                      aria-hidden="true"
-                      className="sticky left-0 z-10 w-14 shrink-0 border-r border-border/10 bg-background/20 px-2 py-3 text-right font-mono text-xs leading-5 text-muted-foreground/60"
-                    >
-                      {Array.from({ length: viewerLineCount }, (_, i) => i + 1).join('\n')}
-                    </pre>
-                    <pre
-                      ref={viewerCodeRef}
-                      onMouseUp={handleViewerSelection}
-                      onKeyUp={handleViewerSelection}
-                      className="min-w-max flex-1 px-4 py-3 font-mono text-xs leading-5 overflow-visible whitespace-pre"
-                    >
-                      <code
-                        className={`language-${codeLanguage}`}
-                        dangerouslySetInnerHTML={{ __html: highlightedContent }}
+            {fileState.status === 'succeeded' && fileState.data && (
+              <div className="p-4">
+                {isEditing ? (
+                  <div className="flex rounded-2xl shadow-neu-inset border-none bg-background/60 overflow-x-auto custom-scrollbar">
+                    <div className="flex min-w-full">
+                      <pre
+                        ref={editorGutterRef}
+                        aria-hidden="true"
+                        className="sticky left-0 z-10 w-14 shrink-0 border-r border-border/10 bg-background/20 px-2 py-3 text-right font-mono text-xs leading-5 text-muted-foreground/60"
+                      >
+                        {Array.from({ length: editorLineCount }, (_, i) => i + 1).join('\n')}
+                      </pre>
+                      <textarea
+                        ref={editorTextareaRef}
+                        value={editorValue}
+                        onChange={(e) => setEditorValue(e.target.value)}
+                        onSelect={handleTextareaSelection}
+                        onKeyUp={handleTextareaSelection}
+                        onMouseUp={handleTextareaSelection}
+                        spellCheck={false}
+                        rows={editorLineCount}
+                        className="min-w-max flex-1 resize-none bg-transparent px-3 py-3 font-mono text-xs leading-5 outline-none whitespace-pre overflow-hidden text-foreground/90"
                       />
-                    </pre>
+                    </div>
                   </div>
-                </div>
-              )}
+                ) : (
+                  <div className="flex rounded-2xl shadow-neu-inset border-none bg-background/60 overflow-x-auto custom-scrollbar">
+                    <div className="flex min-w-full">
+                      <pre
+                        ref={viewerGutterRef}
+                        aria-hidden="true"
+                        className="sticky left-0 z-10 w-14 shrink-0 border-r border-border/10 bg-background/20 px-2 py-3 text-right font-mono text-xs leading-5 text-muted-foreground/60"
+                      >
+                        {Array.from({ length: viewerLineCount }, (_, i) => i + 1).join('\n')}
+                      </pre>
+                      <pre
+                        ref={viewerCodeRef}
+                        onMouseUp={handleViewerSelection}
+                        onKeyUp={handleViewerSelection}
+                        className="min-w-max flex-1 px-4 py-3 font-mono text-xs leading-5 overflow-visible whitespace-pre"
+                      >
+                        <code
+                          className={`language-${codeLanguage}`}
+                          dangerouslySetInnerHTML={{ __html: highlightedContent }}
+                        />
+                      </pre>
+                    </div>
+                  </div>
+                )}
 
-              {!fileState.canEdit && (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Read-only mode: sign in with GitHub and select an owned repository to edit files.
-                </p>
-              )}
+                {!fileState.canEdit && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Read-only mode: sign in with GitHub and select an owned repository to edit files.
+                  </p>
+                )}
 
-              {fileState.saveStatus === 'succeeded' && (
-                <p className="mt-2 inline-flex items-center gap-1.5 text-xs text-emerald-600">
-                  <Check className="size-3.5" />
-                  Changes saved successfully.
-                </p>
-              )}
+                {fileState.saveStatus === 'succeeded' && (
+                  <p className="mt-2 inline-flex items-center gap-1.5 text-xs text-emerald-600">
+                    <Check className="size-3.5" />
+                    Changes saved successfully.
+                  </p>
+                )}
 
-              {fileState.saveStatus === 'failed' && fileState.saveError && (
-                <p className="mt-2 text-xs text-destructive">{fileState.saveError}</p>
-              )}
+                {fileState.saveStatus === 'failed' && fileState.saveError && (
+                  <p className="mt-2 text-xs text-destructive">{fileState.saveError}</p>
+                )}
 
-            </div>
-          )}
+              </div>
+            )}
           </div>
 
           <div className="relative min-h-104 xl:justify-self-end xl:w-full xl:max-w-120">
@@ -951,11 +949,10 @@ export default function AnalyzeFilePage() {
                 <button
                   type="button"
                   onClick={() => setIsSnippetPopoverPinned((prev) => !prev)}
-                  className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[10px] transition-colors ${
-                    isSnippetPopoverPinned
+                  className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[10px] transition-colors ${isSnippetPopoverPinned
                       ? 'border-primary/40 bg-primary/10 text-primary'
                       : 'border-border/60 bg-background/70 text-muted-foreground hover:text-foreground'
-                  }`}
+                    }`}
                 >
                   <Pin className="size-3" />
                   {isSnippetPopoverPinned ? 'Pinned' : 'Pin'}
@@ -1069,11 +1066,10 @@ export default function AnalyzeFilePage() {
               <button
                 type="button"
                 onClick={() => setIsSnippetPopoverPinned((prev) => !prev)}
-                className={`rounded-lg border px-2.5 py-1 text-[10px] ${
-                  isSnippetPopoverPinned
+                className={`rounded-lg border px-2.5 py-1 text-[10px] ${isSnippetPopoverPinned
                     ? 'border-primary/40 bg-primary/10 text-primary'
                     : 'border-border/60 bg-background/70 text-muted-foreground hover:text-foreground'
-                }`}
+                  }`}
               >
                 {isSnippetPopoverPinned ? 'Unpin' : 'Pin'}
               </button>
