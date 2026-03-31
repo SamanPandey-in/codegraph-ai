@@ -12,6 +12,7 @@ import { LandingPage, LoginPage, SignupPage } from '@/features/auth';
 import { DashboardPage }                      from '@/features/dashboard';
 import { UploadRepoPage, GraphPage }             from '@/features/graph';
 import { AnalyzeFilePage, AnalyzePage }             from '@/features/analyze';
+import { AskPage } from '@/features/ai';
 
 function RootRedirect() {
   const { isAuthenticated, loading } = useAuth();
@@ -46,6 +47,7 @@ function AppRoutes() {
           <Route path="/analyze/:dir_name" element={<AnalyzePage />} />
           <Route path="/analyze/:dir_name/file" element={<AnalyzeFilePage />} />
           <Route path="/graph" element={<GraphPage />} />
+          <Route path="/ask" element={<AskPage />} />
         </Route>
       </Route>
 

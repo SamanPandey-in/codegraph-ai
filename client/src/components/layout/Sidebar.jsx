@@ -9,6 +9,7 @@ import {
   ChevronRight,
   UploadIcon,
   GitGraphIcon,
+  MessageSquare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -32,6 +33,11 @@ const NAV_ITEMS = [
     to: '/graph',
     icon: <Network className="size-4 shrink-0" />,
     label: 'Graph',
+  },
+  {
+    to: '/ask',
+    icon: <MessageSquare className="size-4 shrink-0" />,
+    label: 'Ask',
   },
 ];
 

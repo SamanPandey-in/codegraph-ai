@@ -397,11 +397,17 @@ export default function GraphView() {
         </div>
       </ReactFlow>
 
-      <AiPanel
-        nodeId={selectedNodeId}
-        graph={graph}
-        onClose={() => dispatch(selectNode(null))}
-      />
+      {selectedNodeId && (
+        <div className="pointer-events-none absolute right-3 top-3 z-20 w-88 max-w-[calc(100%-1.5rem)] animate-in fade-in slide-in-from-right-2 duration-200">
+          <div className="pointer-events-auto max-h-[calc(100vh-12rem)] overflow-auto custom-scrollbar">
+            <AiPanel
+              nodeId={selectedNodeId}
+              graph={graph}
+              onClose={() => dispatch(selectNode(null))}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
