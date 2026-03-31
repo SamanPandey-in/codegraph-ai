@@ -137,7 +137,7 @@ function toGraphFromRows(nodeRows = [], edgeRows = []) {
 
 router.use(aiLimiter);
 
-router.post('/suggest-refactor', requirePlan('pro', 'team'), async (req, res, next) => {
+router.post('/suggest-refactor', requirePlan(), async (req, res, next) => {
   const jobId = String(req.body?.jobId || '').trim();
   const filePath = String(req.body?.filePath || '').trim();
 
