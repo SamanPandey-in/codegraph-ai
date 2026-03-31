@@ -60,8 +60,15 @@ export class GraphPanel {
 
     // Handle messages from the webview
     this._panel.webview.onDidReceiveMessage(
-      (message) => {
+      async (message) => {
         switch (message.command) {
+          case 'webviewReady':
+          case 'refresh':
+            await this._sendGraphData();
+            break;
+          case 'openSettings':
+            vscode.commands.executeCommand('workbench.action.openSettings', 'codegraphAi');
+            break;
           case 'selectJobId':
             this._apiClient.setCurrentJobId(message.jobId);
             vscode.window.showInformationMessage(`Loaded graph for job ${message.jobId.slice(0, 8)}...`);
@@ -97,6 +104,20 @@ export class GraphPanel {
     this._panel.webview.html = this._getHtmlForWebview(this._panel.webview, repoPath);
   }
 
+  private async _sendGraphData() {
+    const jobId = this._apiClient.currentJobId;
+    if (!jobId) {
+      this._panel.webview.postMessage({ command: 'error', message: 'No graph loaded. Run an analysis first.' });
+      return;
+    }
+    try {
+      const data = await this._apiClient.getGraph(jobId);
+      this._panel.webview.postMessage({ command: 'graphLoaded', data: { ...data, jobId } });
+    } catch (err) {
+      this._panel.webview.postMessage({ command: 'error', message: (err as Error).message });
+    }
+  }
+
   private _getHtmlForWebview(webview: vscode.Webview, repoPath: string): string {
     const styleResetUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'reset.css'));
     const styleMainUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'main.css'));
@@ -124,8 +145,8 @@ export class GraphPanel {
 <body>
   <div id="root"></div>
   <script nonce="${nonce}">
-    const vscode = acquireVsCodeApi();
-    const repoPath = "${escapeHtml(repoPath)}";
+    window.vscode = acquireVsCodeApi();
+    window.repoPath = "${escapeHtml(repoPath)}";
   </script>
   <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>

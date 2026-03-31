@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { Search, X, CheckCircle, AlertCircle } from 'lucide-react';
+import { Search, X, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { queryGraph, resetAiState, selectAiQueryState } from '../slices/aiSlice';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

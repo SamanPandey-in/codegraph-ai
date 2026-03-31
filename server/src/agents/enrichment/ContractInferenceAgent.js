@@ -1,12 +1,11 @@
 import { readFile } from 'fs/promises';
 import path from 'path';
-import OpenAI from 'openai';
 import crypto from 'crypto';
 import pLimit from 'p-limit';
 import { BaseAgent } from '../core/BaseAgent.js';
+import { createChatClient } from '../../services/ai/llmProvider.js';
 import { redisClient } from '../../infrastructure/connections.js';
 
-const MODEL = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
 const CACHE_TTL = Number(process.env.AI_CACHE_TTL_SECONDS || 3600);
 const CONCURRENCY = Number(process.env.CONTRACT_CONCURRENCY || 3);
 
@@ -80,13 +79,10 @@ export class ContractInferenceAgent extends BaseAgent {
   maxRetries = 1;
   timeoutMs = 180_000;
 
-  constructor({ openaiClient, redis } = {}) {
+  constructor({ redis } = {}) {
     super();
-    this.openai =
-      openaiClient ||
-      (process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null);
+    this.chatClient = createChatClient();
     this.redis = redis || redisClient;
-    this.model = MODEL;
     this.concurrency = normalizeConcurrency(CONCURRENCY, 3);
     this.cacheTtlSeconds = Number.isFinite(CACHE_TTL) && CACHE_TTL > 0 ? CACHE_TTL : 3600;
   }
@@ -99,13 +95,13 @@ export class ContractInferenceAgent extends BaseAgent {
     const errors = [];
     const contracts = {};
 
-    if (!this.openai) {
+    if (!this.chatClient.isConfigured()) {
       return this.buildResult({
         jobId: context?.jobId,
         status: 'failed',
         confidence: 0,
         data: {},
-        errors: [{ code: 500, message: 'OPENAI_API_KEY required for ContractInferenceAgent.' }],
+        errors: [{ code: 500, message: 'AI provider is not configured. Set AI_API_KEY (or OPENAI_API_KEY) in your environment.' }],
         warnings,
         metrics: {},
         processingTimeMs: Date.now() - start,
@@ -160,15 +156,14 @@ export class ContractInferenceAgent extends BaseAgent {
           attempted += 1;
 
           try {
-            const completion = await this.openai.chat.completions.create({
-              model: this.model,
+            const result = await this.chatClient.createChatCompletion({
               temperature: 0.0,
-              max_tokens: 600,
-              response_format: { type: 'json_object' },
+              maxTokens: 600,
+              responseFormat: { type: 'json_object' },
               messages: [{ role: 'user', content: buildContractPrompt(filePath, content) }],
             });
 
-            const raw = completion?.choices?.[0]?.message?.content || '{}';
+            const raw = result?.content || '{}';
             const parsed = JSON.parse(String(raw).replace(/```json|```/g, '').trim());
             const normalized = normalizeContract(parsed);
 

@@ -227,7 +227,7 @@ export default function GraphToolbar({ graphContainerId = 'graph-container' }) {
           size="sm"
           onClick={() => {
             dispatch(clearGraph());
-            navigate('/analyze');
+            navigate('/upload-repo');
           }}
           className="gap-2 h-9 px-4 rounded-xl"
         >
