@@ -42,6 +42,7 @@ function AppRoutes() {
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/upload-repo" element={<UploadRepoPage />} />
           <Route path="/analyze" element={<AnalyzePage />} />
+          <Route path="/analyze/file" element={<AnalyzeFilePage />} />
           <Route path="/analyze/:dir_name" element={<AnalyzePage />} />
           <Route path="/analyze/:dir_name/file" element={<AnalyzeFilePage />} />
           <Route path="/graph" element={<GraphPage />} />

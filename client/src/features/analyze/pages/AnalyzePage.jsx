@@ -75,11 +75,17 @@ export default function AnalyzePage() {
   };
 
   const openFile = (entryPath) => {
-    const encodedDir = encodeURIComponent(routeDirectory);
     const nextSearch = new URLSearchParams();
     nextSearch.set('path', currentPath);
     nextSearch.set('file', entryPath);
-    navigate(`/analyze/${encodedDir}/file?${nextSearch.toString()}`);
+
+    if (routeDirectory) {
+      const encodedDir = encodeURIComponent(routeDirectory);
+      navigate(`/analyze/${encodedDir}/file?${nextSearch.toString()}`);
+      return;
+    }
+
+    navigate(`/analyze/file?${nextSearch.toString()}`);
   };
 
   const pathSegments = currentPath ? currentPath.split('/').filter(Boolean) : [];
@@ -149,6 +155,7 @@ export default function AnalyzePage() {
       )}
 
       {!routeDirectory && structure.status === 'succeeded' && (
+        <>
         <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {structure.directories.map((directory) => (
               <button
@@ -191,6 +198,33 @@ export default function AnalyzePage() {
             </button>
           ))}
         </div>
+
+        {structure.files.length > 0 && (
+          <div className="mt-7">
+            <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60">
+              Root Files
+            </p>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {structure.files.map((file) => (
+                <button
+                  key={file.path}
+                  type="button"
+                  onClick={() => openFile(file.path)}
+                  className="rounded-2xl shadow-neu-inset border-none bg-background/40 p-4"
+                >
+                  <div className="flex items-center gap-2 text-foreground">
+                    <FileCode2 className="size-4 text-primary" />
+                    <span className="truncate text-sm font-bold tracking-tight">{file.name}</span>
+                  </div>
+                  <p className="mt-1 text-[10px] uppercase font-bold tracking-widest text-muted-foreground/60">
+                    File | {formatSize(file.size)}
+                  </p>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        </>
       )}
 
       {routeDirectory && (

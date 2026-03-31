@@ -81,6 +81,7 @@ export const fetchRepositoryStructure = createAsyncThunk(
         },
         truncated: payload.truncated,
         directories: payload.directories,
+        files: payload.files,
       };
     } catch (err) {
       return rejectWithValue(
@@ -197,6 +198,7 @@ const analyzeSlice = createSlice({
       error: null,
       truncated: false,
       directories: [],
+      files: [],
       repository: null,
     },
     contents: {
@@ -232,6 +234,7 @@ const analyzeSlice = createSlice({
         state.structure.error = null;
         state.structure.truncated = action.payload.truncated;
         state.structure.directories = action.payload.directories;
+        state.structure.files = action.payload.files;
         state.structure.repository = action.payload.repository;
       })
       .addCase(fetchRepositoryStructure.rejected, (state, action) => {

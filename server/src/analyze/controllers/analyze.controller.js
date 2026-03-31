@@ -564,7 +564,8 @@ export async function listRepositoryStructureController(req, res, next) {
       fetchRepoTree({ owner, repo, ref: branch, token }),
     ]);
 
-    const topLevel = new Map();
+    const topLevelDirectories = new Map();
+    const topLevelFiles = new Map();
 
     for (const entry of repoTree.tree) {
       const pathValue = String(entry?.path || '').trim();
@@ -573,19 +574,29 @@ export async function listRepositoryStructureController(req, res, next) {
       const segments = pathValue.split('/').filter(Boolean);
       if (!segments.length) continue;
 
-      const topDir = segments[0];
-      const isDirectoryPath = entry.type === 'tree';
+      const topLevelName = segments[0];
 
-      if (!topLevel.has(topDir)) {
-        topLevel.set(topDir, {
-          name: topDir,
-          path: topDir,
+      // Top-level blobs are root files and should not be grouped as directories.
+      if (segments.length === 1 && entry.type === 'blob') {
+        topLevelFiles.set(topLevelName, {
+          name: topLevelName,
+          path: topLevelName,
+          size: Number.isFinite(entry?.size) ? entry.size : 0,
+          type: 'file',
+        });
+        continue;
+      }
+
+      if (!topLevelDirectories.has(topLevelName)) {
+        topLevelDirectories.set(topLevelName, {
+          name: topLevelName,
+          path: topLevelName,
           fileCount: 0,
           subdirectories: new Set(),
         });
       }
 
-      const current = topLevel.get(topDir);
+      const current = topLevelDirectories.get(topLevelName);
 
       if (entry.type === 'blob') {
         current.fileCount += 1;
@@ -593,12 +604,10 @@ export async function listRepositoryStructureController(req, res, next) {
 
       if (segments.length > 1) {
         current.subdirectories.add(segments[1]);
-      } else if (segments.length === 1 && isDirectoryPath) {
-        current.subdirectories = current.subdirectories || new Set();
       }
     }
 
-    const directories = Array.from(topLevel.values())
+    const directories = Array.from(topLevelDirectories.values())
       .map((item) => ({
         name: item.name,
         path: item.path,
@@ -607,6 +616,9 @@ export async function listRepositoryStructureController(req, res, next) {
           .filter(Boolean)
           .sort((a, b) => a.localeCompare(b)),
       }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    const files = Array.from(topLevelFiles.values())
       .sort((a, b) => a.name.localeCompare(b.name));
 
     return res.status(200).json({
@@ -620,6 +632,7 @@ export async function listRepositoryStructureController(req, res, next) {
       },
       truncated: repoTree.truncated,
       directories,
+      files,
     });
   } catch (err) {
     return next(err);

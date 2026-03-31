@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
 import { QueryAgent } from '../../../agents/query/QueryAgent.js';
 import { AnalysisAgent } from '../../../agents/analysis/AnalysisAgent.js';
+import { SnippetAnalyzerAgent } from '../../../agents/analysis/SnippetAnalyzerAgent.js';
 import { pgPool, redisClient } from '../../../infrastructure/connections.js';
 import { requirePlan } from '../../../middleware/planGuard.middleware.js';
 import { createChatClient } from '../../../services/ai/llmProvider.js';
@@ -484,6 +485,68 @@ router.post('/impact', async (req, res, next) => {
       affectedFiles: result.data?.impactedFiles || [],
       deadCodeCandidates: result.data?.deadCodeCandidates || [],
     });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/snippet-impact', async (req, res, next) => {
+  const authUser = getAuthUser(req);
+  if (!authUser?.id) {
+    return res.status(401).json({ error: 'Authentication required.' });
+  }
+
+  const jobId = String(req.body?.jobId || '').trim();
+  const filePath = String(req.body?.filePath || '').trim();
+  const snippet = String(req.body?.snippet || '').trim();
+  const lineStart = Number.parseInt(req.body?.lineStart, 10);
+  const lineEnd = Number.parseInt(req.body?.lineEnd, 10);
+
+  if (!jobId || !filePath || !snippet) {
+    return res.status(400).json({ error: 'jobId, filePath, and snippet are required.' });
+  }
+
+  try {
+    const userId = await resolveDatabaseUserId(authUser);
+    if (!userId) {
+      return res.status(500).json({ error: 'Failed to resolve authenticated user.' });
+    }
+
+    const ownership = await pgPool.query(
+      `
+        SELECT 1
+        FROM analysis_jobs
+        WHERE id = $1 AND user_id = $2
+        LIMIT 1
+      `,
+      [jobId, userId],
+    );
+
+    if (ownership.rowCount === 0) {
+      return res.status(404).json({ error: 'Analysis job not found for this user.' });
+    }
+
+    const agent = new SnippetAnalyzerAgent({ db: pgPool });
+    const result = await agent.process(
+      {
+        jobId,
+        filePath,
+        snippet,
+        lineStart,
+        lineEnd,
+      },
+      { jobId },
+    );
+
+    if (result.status === 'failed') {
+      const statusCode = Number(result.errors?.[0]?.code) || 400;
+      return res.status(statusCode).json({
+        error: result.errors?.[0]?.message || 'Unable to analyze snippet impact.',
+        details: result.errors || [],
+      });
+    }
+
+    return res.status(200).json(result.data);
   } catch (error) {
     return next(error);
   }

@@ -38,6 +38,7 @@ export const analyzeService = {
       repository: data?.repository || null,
       truncated: Boolean(data?.truncated),
       directories: Array.isArray(data?.directories) ? data.directories : [],
+      files: Array.isArray(data?.files) ? data.files : [],
     };
   },
 
