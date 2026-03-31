@@ -1,7 +1,8 @@
+import { existsSync } from 'fs';
 import { readFile } from 'fs/promises';
 import path from 'path';
 import { parentPort, workerData } from 'worker_threads';
-import Parser from 'web-tree-sitter';
+import { Language, Parser, Query } from 'web-tree-sitter';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -89,6 +90,26 @@ function declarationKindFromCaptures(captures) {
   return marker?.name || 'fn';
 }
 
+function resolveWasmPath(language) {
+  const wasmFile = `tree-sitter-${language}.wasm`;
+  const configuredWasmDir = process.env.PARSER_WASM_DIR;
+
+  const candidates = [
+    configuredWasmDir ? path.resolve(configuredWasmDir, wasmFile) : null,
+    path.resolve(__dirname, '../../../wasm', wasmFile),
+    path.resolve(__dirname, '../../../node_modules/tree-sitter-wasms/out', wasmFile),
+    path.resolve(process.cwd(), 'wasm', wasmFile),
+    path.resolve(process.cwd(), 'node_modules/tree-sitter-wasms/out', wasmFile),
+  ].filter(Boolean);
+
+  const located = candidates.find((candidate) => existsSync(candidate));
+  if (located) return located;
+
+  throw new Error(
+    `Missing Tree-sitter WASM for ${language}. Looked in: ${candidates.join(', ')}`,
+  );
+}
+
 async function run() {
   const { filePath, relativePath, language } = workerData;
 
@@ -101,8 +122,8 @@ async function run() {
 
   await Parser.init();
 
-  const wasmPath = path.resolve(__dirname, '../../../wasm', `tree-sitter-${language}.wasm`);
-  const lang = await Parser.Language.load(wasmPath);
+  const wasmPath = resolveWasmPath(language);
+  const lang = await Language.load(wasmPath);
 
   const parser = new Parser();
   parser.setLanguage(lang);
@@ -118,7 +139,7 @@ async function run() {
   const seenDecls = new Set();
 
   if (queries.imports) {
-    const query = lang.query(queries.imports);
+    const query = new Query(lang, queries.imports);
     for (const match of query.matches(root)) {
       for (const capture of match.captures) {
         if (capture.name !== 'import') continue;
@@ -131,7 +152,7 @@ async function run() {
   }
 
   if (queries.declarations) {
-    const query = lang.query(queries.declarations);
+    const query = new Query(lang, queries.declarations);
     for (const match of query.matches(root)) {
       const kind = declarationKindFromCaptures(match.captures);
       for (const capture of match.captures) {

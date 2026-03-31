@@ -3,6 +3,7 @@ import { ScannerAgent } from '../scanner/ScannerAgent.js';
 import { PolyglotParserAgent } from '../parser/PolyglotParserAgent.js';
 import { GraphBuilderAgent } from '../graph/GraphBuilderAgent.js';
 import { EnrichmentAgent } from '../enrichment/EnrichmentAgent.js';
+import { ContractInferenceAgent } from '../enrichment/ContractInferenceAgent.js';
 import { EmbeddingAgent } from '../embedding/EmbeddingAgent.js';
 import { PersistenceAgent } from '../persistence/PersistenceAgent.js';
 import { AuditLogger } from './AuditLogger.js';
@@ -31,6 +32,7 @@ export class SupervisorAgent {
       parser: new PolyglotParserAgent(),
       graphBuilder: new GraphBuilderAgent(),
       enrichment: new EnrichmentAgent(),
+      contractInference: new ContractInferenceAgent(),
       embedding: new EmbeddingAgent(),
       persistence: new PersistenceAgent({ db }),
     };
@@ -92,6 +94,16 @@ export class SupervisorAgent {
       agentTrace.push(enrichmentResult);
       Object.assign(pipelineData, enrichmentResult.data);
 
+      await this._updateJobStatus(jobId, 'inferring-contracts');
+      const contractResult = await this._runWithSupervision(
+        this.agents.contractInference,
+        { graph: pipelineData.graph, extractedPath: pipelineData.extractedPath },
+        context,
+        { abortOnCritical: false },
+      );
+      agentTrace.push(contractResult);
+      Object.assign(pipelineData, contractResult.data);
+
       await this._updateJobStatus(jobId, 'embedding');
       const embeddingResult = await this._runWithSupervision(
         this.agents.embedding,
@@ -116,6 +128,7 @@ export class SupervisorAgent {
           edges: pipelineData.edges,
           functionNodes: pipelineData.functionNodes,
           enriched: pipelineData.enriched,
+          contracts: pipelineData.contracts,
           embeddings: pipelineData.embeddings,
           topology: pipelineData.topology,
         },
