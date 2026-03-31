@@ -325,6 +325,7 @@ export class SupervisorAgent {
       const prNumber = input?.github?.prNumber;
       const owner = input?.github?.owner;
       const repo = input?.github?.repo;
+      const sha = input?.github?.headSha;
 
       if (!prNumber || !owner || !repo) return;
       if (!GitHubPRService.isConfigured()) {
@@ -359,6 +360,17 @@ export class SupervisorAgent {
       }
 
       console.log(`[SupervisorAgent] PR comment posted to ${owner}/${repo}#${prNumber}`);
+
+      // Create a check run for PR status
+      if (sha) {
+        const conclusion = impactedFiles.size > 10 ? 'failure' : 'neutral';
+        await GitHubPRService.createCheckRun(owner, repo, sha, {
+          conclusion,
+          title: `${impactedFiles.size} files potentially impacted`,
+          summary: `${changedFiles.length} changed files affect ${impactedFiles.size} dependent files.`,
+          detailsUrl: graphUrl,
+        });
+      }
     } catch (err) {
       // PR comment failure must never abort the main pipeline.
       console.error('[SupervisorAgent] Failed to post PR comment:', err.message);

@@ -115,6 +115,7 @@ router.post('/github', webhookLimiter, express.raw({ type: 'application/json' })
     const branch = payload?.pull_request?.head?.ref;
     const prNumber = payload?.pull_request?.number;
     const prTitle = payload?.pull_request?.title;
+    const headSha = payload?.pull_request?.head?.sha;
 
     logWebhookEvent('info', `Processing PR ${action}`, {
       event,
@@ -183,6 +184,7 @@ router.post('/github', webhookLimiter, express.raw({ type: 'application/json' })
           branch,
           prNumber,
           prTitle,
+          headSha,
         },
         repositoryId,
         userId,
