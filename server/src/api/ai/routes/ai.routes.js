@@ -1,16 +1,15 @@
 import { Router } from 'express';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
-import OpenAI from 'openai';
 import { QueryAgent } from '../../../agents/query/QueryAgent.js';
 import { AnalysisAgent } from '../../../agents/analysis/AnalysisAgent.js';
 import { pgPool, redisClient } from '../../../infrastructure/connections.js';
 import { requirePlan } from '../../../middleware/planGuard.middleware.js';
+import { createChatClient } from '../../../services/ai/llmProvider.js';
 
 const router = Router();
-const openaiClient = process.env.OPENAI_API_KEY
-  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-  : null;
+const chatClient = createChatClient();
+const defaultChatModel = process.env.AI_MODEL || process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
 const aiLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -160,8 +159,8 @@ router.post('/suggest-refactor', requirePlan('pro', 'team'), async (req, res, ne
       return res.status(404).json({ error: 'File not found.' });
     }
 
-    if (!openaiClient) {
-      return res.status(503).json({ error: 'OpenAI is not configured.' });
+    if (!chatClient.isConfigured()) {
+      return res.status(503).json({ error: 'AI provider is not configured.' });
     }
 
     const node = nodeResult.rows[0];
@@ -186,14 +185,14 @@ Respond with a JSON object:
 }
 Only respond with the JSON object.`;
 
-    const response = await openaiClient.chat.completions.create({
-      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-      max_tokens: 400,
+    const completion = await chatClient.createChatCompletion({
+      model: defaultChatModel,
+      maxTokens: 400,
       temperature: 0.2,
       messages: [{ role: 'user', content: prompt }],
     });
 
-    const content = response?.choices?.[0]?.message?.content?.trim() || '';
+    const content = completion?.content?.trim() || '';
 
     let parsed;
     try {
@@ -339,21 +338,15 @@ router.post('/explain/stream', async (req, res, next) => {
     return res.status(400).json({ error: 'question and jobId are required.' });
   }
 
-  if (!openaiClient) {
-    return res.status(503).json({ error: 'OpenAI is not configured for streaming.' });
+  if (!chatClient.isConfigured()) {
+    return res.status(503).json({ error: 'AI provider is not configured for streaming.' });
   }
 
   let clientClosed = false;
-  let stream = null;
+  let streamSession = null;
 
   const closeStream = () => {
-    if (typeof stream?.abort === 'function') {
-      stream.abort();
-    }
-
-    if (typeof stream?.controller?.abort === 'function') {
-      stream.controller.abort();
-    }
+    streamSession?.cancel?.();
   };
 
   const writeEvent = (payload) => {
@@ -395,25 +388,18 @@ router.post('/explain/stream', async (req, res, next) => {
       res.flushHeaders();
     }
 
-    stream = await openaiClient.chat.completions.stream({
-      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-      max_tokens: 500,
-      messages: [
-        {
-          role: 'user',
-          content: question,
-        },
-      ],
+    streamSession = await chatClient.createStream({
+      model: defaultChatModel,
+      maxTokens: 500,
+      messages: [{ role: 'user', content: question }],
+      onText: (text) => {
+        if (!clientClosed) {
+          writeEvent({ text });
+        }
+      },
     });
 
-    for await (const chunk of stream) {
-      if (clientClosed) break;
-
-      const text = chunk?.choices?.[0]?.delta?.content || '';
-      if (text) {
-        writeEvent({ text });
-      }
-    }
+    await streamSession.consume();
 
     if (!clientClosed) {
       res.write('data: [DONE]\n\n');

@@ -1,10 +1,11 @@
 import crypto from 'crypto';
-import OpenAI from 'openai';
 import { BaseAgent } from '../core/BaseAgent.js';
 import { pgPool, redisClient } from '../../infrastructure/connections.js';
+import { createChatClient, createEmbeddingClient } from '../../services/ai/llmProvider.js';
 
-const DEFAULT_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
-const DEFAULT_EMBEDDING_MODEL = process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small';
+const DEFAULT_MODEL = process.env.AI_MODEL || process.env.OPENAI_MODEL || 'gpt-4o-mini';
+const DEFAULT_EMBEDDING_MODEL =
+  process.env.AI_EMBEDDING_MODEL || process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small';
 const CACHE_TTL_SECONDS = Number(process.env.AI_CACHE_TTL_SECONDS || 3600);
 const SEMANTIC_CANDIDATE_LIMIT = 20;
 const CONTEXT_LIMIT = 8;
@@ -120,15 +121,12 @@ export class QueryAgent extends BaseAgent {
   maxRetries = 1;
   timeoutMs = 90_000;
 
-  constructor({ db, redis, openaiClient } = {}) {
+  constructor({ db, redis, llmClient, embeddingClient } = {}) {
     super();
     this.db = db || pgPool;
     this.redis = redis || redisClient;
-    this.openai =
-      openaiClient ||
-      (process.env.OPENAI_API_KEY
-        ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-        : null);
+    this.llmClient = llmClient || createChatClient();
+    this.embeddingClient = embeddingClient || createEmbeddingClient();
     this.model = DEFAULT_MODEL;
     this.embeddingModel = DEFAULT_EMBEDDING_MODEL;
     this.cacheTtlSeconds = Number.isFinite(CACHE_TTL_SECONDS) ? CACHE_TTL_SECONDS : 3600;
@@ -156,13 +154,26 @@ export class QueryAgent extends BaseAgent {
       });
     }
 
-    if (!this.openai) {
+    if (!this.llmClient.isConfigured()) {
       return this.buildResult({
         jobId,
         status: 'failed',
         confidence: 0,
         data: {},
-        errors: [{ code: 500, message: 'OPENAI_API_KEY is missing for QueryAgent.' }],
+        errors: [{ code: 500, message: 'AI provider is not configured for QueryAgent.' }],
+        warnings,
+        metrics: {},
+        processingTimeMs: Date.now() - start,
+      });
+    }
+
+    if (!this.embeddingClient.isConfigured()) {
+      return this.buildResult({
+        jobId,
+        status: 'failed',
+        confidence: 0,
+        data: {},
+        errors: [{ code: 500, message: 'Embedding provider is not configured for QueryAgent.' }],
         warnings,
         metrics: {},
         processingTimeMs: Date.now() - start,
@@ -208,7 +219,7 @@ export class QueryAgent extends BaseAgent {
         });
       }
 
-      const embeddingResponse = await this.openai.embeddings.create({
+      const embeddingResponse = await this.embeddingClient.createEmbedding({
         model: this.embeddingModel,
         input: question,
       });
@@ -246,15 +257,15 @@ export class QueryAgent extends BaseAgent {
       const reranked = keywordRerank(question, candidates);
       const topFiles = reranked.slice(0, CONTEXT_LIMIT);
 
-      const completion = await this.openai.chat.completions.create({
+      const completion = await this.llmClient.createChatCompletion({
         model: this.model,
         temperature: 0.1,
-        max_tokens: 320,
-        response_format: { type: 'json_object' },
+        maxTokens: 320,
+        responseFormat: { type: 'json_object' },
         messages: [{ role: 'user', content: buildAnswerPrompt(question, topFiles) }],
       });
 
-      const rawMessage = completion?.choices?.[0]?.message?.content || '{}';
+      const rawMessage = completion?.content || '{}';
       let parsed;
       try {
         parsed = JSON.parse(rawMessage);
@@ -275,7 +286,7 @@ export class QueryAgent extends BaseAgent {
         confidence: llmConfidence,
         retrievedFiles: topFiles.length,
         queryEmbeddingTokens: Number(embeddingResponse?.usage?.total_tokens || 0),
-        completionTokens: Number(completion?.usage?.completion_tokens || 0),
+        completionTokens: Number(completion?.usage?.completion_tokens || completion?.usage?.output_tokens || 0),
       };
 
       await this._saveQuery({

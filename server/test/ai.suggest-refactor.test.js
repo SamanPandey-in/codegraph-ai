@@ -159,7 +159,7 @@ test('POST /api/ai/suggest-refactor returns 404 when file is not part of the gra
   }
 });
 
-test('POST /api/ai/suggest-refactor returns 503 when OpenAI is not configured', async () => {
+test('POST /api/ai/suggest-refactor returns 503 when AI provider is not configured', async () => {
   const userId = '97bcd6cf-eb90-40dc-a429-11eb45422555';
   const repositoryId = '5cd42d0d-e6d3-40dd-966e-5a2d4b0d3666';
   const jobId = '8085b4cb-1718-428e-9694-9e22cfb76777';
@@ -216,7 +216,7 @@ test('POST /api/ai/suggest-refactor returns 503 when OpenAI is not configured', 
 
     assert.equal(response.status, 503);
     const payload = await response.json();
-    assert.equal(payload.error, 'OpenAI is not configured.');
+    assert.equal(payload.error, 'AI provider is not configured.');
   } finally {
     await pgPool.query('DELETE FROM graph_nodes WHERE job_id = $1', [jobId]);
     await pgPool.query('DELETE FROM analysis_jobs WHERE id = $1', [jobId]);
