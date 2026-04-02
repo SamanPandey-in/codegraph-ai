@@ -8,6 +8,8 @@ import { EnrichmentAgent } from '../enrichment/EnrichmentAgent.js';
 import { ContractInferenceAgent } from '../enrichment/ContractInferenceAgent.js';
 import { EmbeddingAgent } from '../embedding/EmbeddingAgent.js';
 import { PersistenceAgent } from '../persistence/PersistenceAgent.js';
+import { createGraphRepository } from '../../infrastructure/db/graphRepositoryFactory.js';
+import { runMigrations } from '../../infrastructure/db/migrate.js';
 import { AuditLogger } from './AuditLogger.js';
 import { JobStatusEmitter } from './JobStatusEmitter.js';
 import { decideConfidence, computeOverallConfidence } from './confidence.js';
@@ -86,6 +88,19 @@ export class SupervisorAgent {
       Object.assign(pipelineData, graphResult.data);
 
       await this._updateJobStatus(jobId, 'extracting-relationships');
+      // Initialize dynamic graph repository based on topology metrics
+      context.graphRepo = createGraphRepository(pipelineData.topology, {
+        impactAnalysisDepth: input?.maxDepth || 3,
+        forceNeo4j: input?.forceNeo4j,
+        forcePostgres: input?.forcePostgres,
+      });
+
+      // Run Neo4j migrations if Neo4j is selected
+      if (context.graphRepo.constructor.name === 'Neo4jGraphRepository') {
+        await runMigrations().catch((err) => {
+          console.warn('[SupervisorAgent] Neo4j migrations failed, proceeding with caution:', err.message);
+        });
+      }
       const relationshipResult = await this._runWithSupervision(
         this.agents.relationshipExtractor,
         {
