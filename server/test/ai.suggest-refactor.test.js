@@ -124,8 +124,7 @@ test('POST /api/ai/suggest-refactor returns 404 when file is not part of the gra
     `
       INSERT INTO repositories (id, owner_id, source, full_name)
       VALUES ($1, $2, 'local', 'refactor/repo')
-      ON CONFLICT (owner_id, full_name) DO UPDATE
-      SET full_name = EXCLUDED.full_name
+      ON CONFLICT DO NOTHING
     `,
     [repositoryId, userId],
   );
@@ -180,8 +179,7 @@ test('POST /api/ai/suggest-refactor returns 503 when AI provider is not configur
     `
       INSERT INTO repositories (id, owner_id, source, full_name)
       VALUES ($1, $2, 'local', 'refactor/repo-3')
-      ON CONFLICT (owner_id, full_name) DO UPDATE
-      SET full_name = EXCLUDED.full_name
+      ON CONFLICT DO NOTHING
     `,
     [repositoryId, userId],
   );

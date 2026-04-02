@@ -73,8 +73,7 @@ test('GET /api/ai/queries returns paginated history for authenticated owner and 
     `
       INSERT INTO repositories (id, owner_id, source, full_name)
       VALUES ($1, $2, 'local', 'integration/repo')
-      ON CONFLICT (owner_id, full_name) DO UPDATE
-      SET full_name = EXCLUDED.full_name
+       ON CONFLICT DO NOTHING
     `,
     [repositoryId, userId],
   );

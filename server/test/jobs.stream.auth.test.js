@@ -91,7 +91,7 @@ test('GET /api/jobs/:jobId/stream only allows owner access', async () => {
     `
       INSERT INTO repositories (id, owner_id, source, full_name)
       VALUES ($1, $2, 'local', 'jobs/stream-owner-repo')
-      ON CONFLICT (owner_id, full_name) DO NOTHING
+        ON CONFLICT DO NOTHING
     `,
     [repositoryId, ownerId],
   );

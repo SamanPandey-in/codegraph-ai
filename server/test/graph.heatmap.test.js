@@ -75,8 +75,7 @@ test('GET /api/graph/:jobId/heatmap returns nodes ordered by risk score', async 
     `
       INSERT INTO repositories (id, owner_id, source, full_name)
       VALUES ($1, $2, 'local', 'heatmap/repo')
-      ON CONFLICT (owner_id, full_name) DO UPDATE
-      SET full_name = EXCLUDED.full_name
+      ON CONFLICT DO NOTHING
     `,
     [repositoryId, userId],
   );
