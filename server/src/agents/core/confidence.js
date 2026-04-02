@@ -21,13 +21,16 @@ export const CONFIDENCE_THRESHOLDS = {
 };
 
 export const DEFAULT_AGENT_WEIGHTS = {
-	'ingestion-agent': 0.1,
-	'scanner-agent': 0.1,
-	'polyglot-parser-agent': 0.25,
-	'graph-builder-agent': 0.25,
-	'enrichment-agent': 0.1,
-	'embedding-agent': 0.1,
-	'persistence-agent': 0.1,
+	'ingestion-agent': 0.08,
+	'scanner-agent': 0.07,
+	'polyglot-parser-agent': 0.2,
+	'graph-builder-agent': 0.2,
+	'relationship-extractor-agent': 0.1,
+	'enrichment-agent': 0.08,
+	'contract-inference-agent': 0.07,
+	'embedding-agent': 0.08,
+	'neo4j-seed-agent': 0.07,
+	'persistence-agent': 0.05,
 };
 
 export function decideConfidence(confidence) {
@@ -88,6 +91,22 @@ export function scorePolyglotParser({
 	const langCount = Object.keys(languageBreakdown || {}).length;
 	const langBonus = Math.min(0.05, langCount * 0.005);
 	return round3(parseRate * (1 - errorPenalty) + langBonus);
+}
+
+export function scoreRelationshipExtractor({ filesWithEdges = 0, totalFiles = 0 } = {}) {
+	const ratio = safeDiv(filesWithEdges, Math.max(totalFiles, 1), 0);
+	return round3(0.4 + ratio * 0.6);
+}
+
+export function scoreContractInference({ succeeded = 0, attempted = 0 } = {}) {
+	if (attempted === 0) return 0.5;
+	return round3(safeDiv(succeeded, Math.max(attempted, 1), 0));
+}
+
+export function scoreNeo4jSeed({ edgesCreated = 0, totalEdges = 0, failedEdges = 0 } = {}) {
+	const successRate = safeDiv(edgesCreated, Math.max(totalEdges, 1), 0);
+	const failPenalty = Math.min(0.3, safeDiv(failedEdges, Math.max(totalEdges, 1), 0));
+	return round3(successRate * (1 - failPenalty));
 }
 
 export function scoreGraphBuilder({

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
@@ -16,6 +16,8 @@ import {
   Loader2,
   Star,
   RotateCcw,
+  BarChart3,
+  AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,7 +39,10 @@ import {
 import { useAuth } from '@/features/auth/context/AuthContext';
 import {
   fetchAnalyzedRepositories,
+  fetchCacheMetrics,
   fetchRepositoryJobs,
+  selectDashboardCacheMetrics,
+  selectDashboardCacheMetricsStatus,
   toggleRepositoryStar,
   selectAnalyzedRepositories,
   selectDashboardError,
@@ -101,6 +106,14 @@ const SOURCE_FILTER_OPTIONS = [
 
 const DEFAULT_SORT = 'recent';
 const DEFAULT_SOURCE_FILTER = 'all';
+const CACHE_POLL_BASE_MS = 15000;
+const CACHE_POLL_HIDDEN_MS = 60000;
+const CACHE_POLL_MAX_MS = 120000;
+const CACHE_TREND_WINDOW_SIZE = 12;
+const CACHE_HIT_RATE_WARN_PERCENT = 75;
+const CACHE_HIT_RATE_CRITICAL_PERCENT = 55;
+const CACHE_READ_ERROR_WARN_DELTA = 1;
+const CACHE_READ_ERROR_CRITICAL_DELTA = 3;
 
 const parseSortFromQuery = (value) => {
   return SORT_OPTIONS.some((option) => option.value === value)
@@ -122,6 +135,40 @@ const formatDate = (value) => {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(parsed);
+};
+
+const formatPercent = (value) => {
+  if (!Number.isFinite(value)) return 'N/A';
+  return `${value.toFixed(2)}%`;
+};
+
+const formatCompactNumber = (value) => {
+  if (!Number.isFinite(value)) return '-';
+  return new Intl.NumberFormat(undefined, {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(value);
+};
+
+const getCachePollDelay = ({
+  consecutiveFailures,
+  hidden,
+}) => {
+  const baseDelay = hidden ? CACHE_POLL_HIDDEN_MS : CACHE_POLL_BASE_MS;
+  const exp = Math.min(Math.max(consecutiveFailures - 1, 0), 3);
+  return Math.min(baseDelay * (2 ** exp), CACHE_POLL_MAX_MS);
+};
+
+const getCacheHealthBadgeStyle = (level) => {
+  if (level === 'critical') {
+    return 'bg-red-500/15 text-red-300 border border-red-500/40';
+  }
+
+  if (level === 'warning') {
+    return 'bg-amber-500/15 text-amber-300 border border-amber-500/40';
+  }
+
+  return 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/40';
 };
 
 function MetricCard({ icon, title, value, helper, index = 0 }) {
@@ -178,12 +225,17 @@ export default function DashboardPage() {
   const [expandedRepos, setExpandedRepos] = useState({});
   const [starringRepoId, setStarringRepoId] = useState(null);
   const [reanalyzingRepoId, setReanalyzingRepoId] = useState(null);
+  const [cacheTrend, setCacheTrend] = useState([]);
+  const cachePollTimerRef = useRef(null);
+  const cachePollFailureRef = useRef(0);
 
   const status = useSelector(selectDashboardStatus);
   const error = useSelector(selectDashboardError);
   const repositories = useSelector(selectAnalyzedRepositories);
   const summary = useSelector(selectDashboardSummary);
   const repositoryJobsById = useSelector(selectRepositoryJobsById);
+  const cacheMetrics = useSelector(selectDashboardCacheMetrics);
+  const cacheMetricsStatus = useSelector(selectDashboardCacheMetricsStatus);
 
   const displayName = user?.username || user?.email?.split('@')[0] || 'there';
 
@@ -198,6 +250,75 @@ export default function DashboardPage() {
       }),
     );
   }, [dispatch, user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return undefined;
+
+    let cancelled = false;
+    cachePollFailureRef.current = 0;
+
+    const scheduleNext = (delay) => {
+      if (cachePollTimerRef.current) {
+        clearTimeout(cachePollTimerRef.current);
+      }
+
+      cachePollTimerRef.current = setTimeout(async () => {
+        if (cancelled) return;
+
+        const result = await dispatch(fetchCacheMetrics());
+        const requestFailed = fetchCacheMetrics.rejected.match(result);
+
+        cachePollFailureRef.current = requestFailed
+          ? cachePollFailureRef.current + 1
+          : 0;
+
+        const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+        const nextDelay = getCachePollDelay({
+          consecutiveFailures: cachePollFailureRef.current,
+          hidden,
+        });
+
+        scheduleNext(nextDelay);
+      }, delay);
+    };
+
+    scheduleNext(0);
+
+    return () => {
+      cancelled = true;
+      if (cachePollTimerRef.current) {
+        clearTimeout(cachePollTimerRef.current);
+        cachePollTimerRef.current = null;
+      }
+    };
+  }, [dispatch, user?.id]);
+
+  useEffect(() => {
+    if (!cacheMetrics.generatedAt) return;
+
+    setCacheTrend((previous) => {
+      const previousPoint = previous[previous.length - 1];
+      if (previousPoint?.generatedAt === cacheMetrics.generatedAt) {
+        return previous;
+      }
+
+      const nextPoint = {
+        generatedAt: cacheMetrics.generatedAt,
+        hitRatePercent: Number.isFinite(cacheMetrics.summary.hitRatePercent)
+          ? cacheMetrics.summary.hitRatePercent
+          : null,
+        readsTotal: cacheMetrics.summary.readsTotal,
+        readError: cacheMetrics.metrics.readError,
+      };
+
+      return [...previous, nextPoint].slice(-CACHE_TREND_WINDOW_SIZE);
+    });
+  }, [
+    cacheMetrics.generatedAt,
+    cacheMetrics.metrics.readError,
+    cacheMetrics.summary.hitRatePercent,
+    cacheMetrics.summary.readsTotal,
+  ]);
 
   useEffect(() => {
     const nextParams = new URLSearchParams();
@@ -241,9 +362,146 @@ export default function DashboardPage() {
         value: summary.lastAnalyzedAt ? formatDate(summary.lastAnalyzedAt) : 'No analyses yet',
         helper: 'Most recent analysis timestamp returned by the backend.',
       },
+      {
+        key: 'cache-hit-rate',
+        icon: <Zap className="size-4 text-primary" />,
+        title: 'Cache hit rate',
+        value: formatPercent(cacheMetrics.summary.hitRatePercent),
+        helper:
+          cacheMetricsStatus === 'loading'
+            ? 'Refreshing cache metrics...'
+            : `Reads ${cacheMetrics.summary.readsTotal} · Redis ${cacheMetrics.redis.status}`,
+      },
     ],
-    [summary.lastAnalyzedAt, summary.totalAnalyzed, summary.uniqueOwners],
+    [
+      cacheMetrics.redis.status,
+      cacheMetrics.summary.hitRatePercent,
+      cacheMetrics.summary.readsTotal,
+      cacheMetricsStatus,
+      summary.lastAnalyzedAt,
+      summary.totalAnalyzed,
+      summary.uniqueOwners,
+    ],
   );
+
+  const cacheTrendSummary = useMemo(() => {
+    const latest = cacheTrend[cacheTrend.length - 1] || null;
+    const previous = cacheTrend[cacheTrend.length - 2] || null;
+
+    const hitRateDelta =
+      latest && previous && Number.isFinite(latest.hitRatePercent) && Number.isFinite(previous.hitRatePercent)
+        ? latest.hitRatePercent - previous.hitRatePercent
+        : null;
+
+    const readsDelta =
+      latest && previous && Number.isFinite(latest.readsTotal) && Number.isFinite(previous.readsTotal)
+        ? latest.readsTotal - previous.readsTotal
+        : null;
+
+    const errorDelta =
+      latest && previous && Number.isFinite(latest.readError) && Number.isFinite(previous.readError)
+        ? latest.readError - previous.readError
+        : null;
+
+    return {
+      latest,
+      hitRateDelta,
+      readsDelta,
+      errorDelta,
+    };
+  }, [cacheTrend]);
+
+  const cacheHealth = useMemo(() => {
+    const alerts = [];
+    const redisStatus = cacheMetrics.redis.status;
+    const latestHitRate = cacheTrendSummary.latest?.hitRatePercent;
+    const errorDelta = cacheTrendSummary.errorDelta;
+
+    if (redisStatus && redisStatus !== 'connected') {
+      alerts.push({
+        id: 'redis-status',
+        level: 'critical',
+        message: `Redis status is ${redisStatus}. Cache reliability may be degraded.`,
+      });
+    }
+
+    if (Number.isFinite(latestHitRate)) {
+      if (latestHitRate < CACHE_HIT_RATE_CRITICAL_PERCENT) {
+        alerts.push({
+          id: 'hit-rate-critical',
+          level: 'critical',
+          message: `Hit rate ${latestHitRate.toFixed(1)}% is below ${CACHE_HIT_RATE_CRITICAL_PERCENT}% (critical floor).`,
+        });
+      } else if (latestHitRate < CACHE_HIT_RATE_WARN_PERCENT) {
+        alerts.push({
+          id: 'hit-rate-warning',
+          level: 'warning',
+          message: `Hit rate ${latestHitRate.toFixed(1)}% is below ${CACHE_HIT_RATE_WARN_PERCENT}% (warning floor).`,
+        });
+      }
+    }
+
+    if (Number.isFinite(errorDelta)) {
+      if (errorDelta >= CACHE_READ_ERROR_CRITICAL_DELTA) {
+        alerts.push({
+          id: 'read-error-critical',
+          level: 'critical',
+          message: `Read errors increased by ${errorDelta} in the latest interval.`,
+        });
+      } else if (errorDelta >= CACHE_READ_ERROR_WARN_DELTA) {
+        alerts.push({
+          id: 'read-error-warning',
+          level: 'warning',
+          message: `Read errors increased by ${errorDelta} since the previous sample.`,
+        });
+      }
+    }
+
+    if (cacheMetricsStatus === 'failed') {
+      alerts.push({
+        id: 'metrics-fetch-failed',
+        level: 'warning',
+        message: 'Metrics polling failed. Backoff is active until fetches recover.',
+      });
+    }
+
+    const level = alerts.some((alert) => alert.level === 'critical')
+      ? 'critical'
+      : alerts.some((alert) => alert.level === 'warning')
+        ? 'warning'
+        : 'healthy';
+
+    return {
+      level,
+      alerts,
+    };
+  }, [
+    cacheMetrics.redis.status,
+    cacheMetricsStatus,
+    cacheTrendSummary.errorDelta,
+    cacheTrendSummary.latest,
+  ]);
+
+  const cacheTrendBars = useMemo(() => {
+    const validPoints = cacheTrend.filter((point) => Number.isFinite(point.hitRatePercent));
+
+    if (validPoints.length === 0) {
+      return [];
+    }
+
+    const maxHitRate = Math.max(...validPoints.map((point) => point.hitRatePercent), 1);
+
+    return cacheTrend.map((point, index) => {
+      const value = Number.isFinite(point.hitRatePercent) ? point.hitRatePercent : 0;
+      const normalized = Math.max(10, Math.round((value / maxHitRate) * 100));
+
+      return {
+        id: `${point.generatedAt}-${index}`,
+        height: `${normalized}%`,
+        label: Number.isFinite(point.hitRatePercent) ? `${point.hitRatePercent.toFixed(1)}%` : 'N/A',
+      };
+    });
+  }, [cacheTrend]);
 
   const isLoadingFirstTime = status === 'loading' && repositories.length === 0;
   const isRefreshing = status === 'loading' && repositories.length > 0;
@@ -304,6 +562,7 @@ export default function DashboardPage() {
   const refreshHistory = () => {
     if (!user?.id) return;
     dispatch(fetchAnalyzedRepositories({ userId: user.id, page: 1, limit: 50 }));
+    dispatch(fetchCacheMetrics());
   };
 
   const clearFilters = () => {
@@ -533,6 +792,110 @@ export default function DashboardPage() {
             />
           ))}
         </div>
+
+        <Card className="mt-4 rounded-2xl shadow-neu-inset border-none bg-background/40">
+          <CardHeader className="pb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="flex size-8 items-center justify-center rounded-lg bg-background/50 shadow-neu-inset">
+                  <BarChart3 className="size-4 text-primary" />
+                </div>
+                <div>
+                  <CardTitle className="text-sm font-semibold tracking-wide">Cache operations snapshot</CardTitle>
+                  <CardDescription className="text-[11px]">
+                    Rolling session view with adaptive polling and backoff.
+                  </CardDescription>
+                </div>
+              </div>
+              <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/70">
+                {cacheTrendSummary.latest?.generatedAt
+                  ? `Updated ${formatDate(cacheTrendSummary.latest.generatedAt)}`
+                  : 'Awaiting first metrics sample'}
+              </span>
+            </div>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wider ${getCacheHealthBadgeStyle(cacheHealth.level)}`}>
+                Cache health: {cacheHealth.level}
+              </span>
+              <span className="text-[10px] text-muted-foreground/70">
+                Warning floor {CACHE_HIT_RATE_WARN_PERCENT}% · Critical floor {CACHE_HIT_RATE_CRITICAL_PERCENT}%
+              </span>
+            </div>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-3">
+            {cacheHealth.alerts.length > 0 ? (
+              <div className="md:col-span-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2">
+                <p className="flex items-center gap-1 text-[11px] font-semibold text-amber-200">
+                  <AlertTriangle className="size-3.5" />
+                  Active cache alerts
+                </p>
+                <ul className="mt-1 space-y-1 text-[11px] text-amber-100/90">
+                  {cacheHealth.alerts.map((alert) => (
+                    <li key={alert.id}>- {alert.message}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            <div className="rounded-xl bg-background/50 px-3 py-2 shadow-neu-inset">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70">Hit rate trend</p>
+              <p className="mt-1 text-xl font-display font-bold text-foreground">
+                {formatPercent(cacheTrendSummary.latest?.hitRatePercent)}
+              </p>
+              <p className="text-[10px] text-muted-foreground/70">
+                {Number.isFinite(cacheTrendSummary.hitRateDelta)
+                  ? `${cacheTrendSummary.hitRateDelta >= 0 ? '+' : ''}${cacheTrendSummary.hitRateDelta.toFixed(2)} pts from previous sample`
+                  : 'Need two samples to compute delta'}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-background/50 px-3 py-2 shadow-neu-inset">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70">Read throughput</p>
+              <p className="mt-1 text-xl font-display font-bold text-foreground">
+                {formatCompactNumber(cacheTrendSummary.latest?.readsTotal)}
+              </p>
+              <p className="text-[10px] text-muted-foreground/70">
+                {Number.isFinite(cacheTrendSummary.readsDelta)
+                  ? `${cacheTrendSummary.readsDelta >= 0 ? '+' : ''}${cacheTrendSummary.readsDelta} reads since previous sample`
+                  : 'Need two samples to compute delta'}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-background/50 px-3 py-2 shadow-neu-inset">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70">Read errors</p>
+              <p className="mt-1 text-xl font-display font-bold text-foreground">
+                {formatCompactNumber(cacheTrendSummary.latest?.readError)}
+              </p>
+              <p className="text-[10px] text-muted-foreground/70">
+                {Number.isFinite(cacheTrendSummary.errorDelta)
+                  ? `${cacheTrendSummary.errorDelta >= 0 ? '+' : ''}${cacheTrendSummary.errorDelta} since previous sample`
+                  : 'Need two samples to compute delta'}
+              </p>
+            </div>
+
+            <div className="md:col-span-3 rounded-xl bg-background/60 px-3 py-3 shadow-neu-inset">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70">Session sparkline</p>
+              {cacheTrendBars.length > 0 ? (
+                <div className="mt-2 flex h-20 items-end gap-1">
+                  {cacheTrendBars.map((bar) => (
+                    <div
+                      key={bar.id}
+                      className="group relative h-full flex-1 rounded-sm bg-gold/10"
+                      title={`Hit rate ${bar.label}`}
+                    >
+                      <div
+                        className="absolute bottom-0 left-0 right-0 rounded-sm bg-gold/70 transition-all duration-300 group-hover:bg-gold"
+                        style={{ height: bar.height }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 text-xs text-muted-foreground">Collecting cache trend samples...</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
         <div className="mt-4">
           <Card className="mb-4 shadow-neu-inset border-none bg-background/40 rounded-2xl animate-in fade-in slide-in-from-bottom-2 duration-500 delay-300">

@@ -6,6 +6,7 @@ import {
   Code2,
   FolderOpen,
   FileCode2,
+  GitBranch,
   Flame,
   Maximize2,
   Minimize2,
@@ -207,6 +208,17 @@ export default function GraphToolbar({ graphContainerId = 'graph-container' }) {
         >
           {isSharing ? <Loader2 className="size-3.5 animate-spin" /> : <Share2 className="size-3.5" />}
           Share
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => navigate('/impact')}
+          disabled={!jobId}
+          title="Open impact analysis"
+          className="gap-2 h-9 px-4 rounded-xl"
+        >
+          <GitBranch className="size-3.5" />
+          Impact
         </Button>
         <Button
           variant="outline"

@@ -1,93 +1,23 @@
 import { Router } from 'express';
-import jwt from 'jsonwebtoken';
 import path from 'path';
 import { pgPool, redisClient } from '../../../infrastructure/connections.js';
 import {
   buildRepositoriesListCacheKey,
   buildRepositoryJobsCacheKey,
   cacheTtl,
+  getCacheMetricsSnapshot,
   invalidateRepositoriesCacheForUser,
   readJsonCache,
   writeJsonCache,
 } from '../../../infrastructure/cache.js';
+import {
+  getCacheMetricsHistory,
+  getLatestCacheMetrics,
+  getCacheMetricsRetentionStatus,
+} from '../../../infrastructure/cacheMetricsPersistence.js';
+import { getAuthUser, isUuid, resolveDatabaseUserId } from '../../../utils/authUser.js';
 
 const router = Router();
-
-const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-function getAuthUser(req) {
-  const token = req.cookies?.token || req.headers.authorization?.replace('Bearer ', '');
-  if (!token || !process.env.JWT_SECRET) return null;
-
-  try {
-    return jwt.verify(token, process.env.JWT_SECRET);
-  } catch {
-    return null;
-  }
-}
-
-function isUuid(value) {
-  return UUID_REGEX.test(String(value || ''));
-}
-
-async function resolveDatabaseUserId(authUser) {
-  const authId = String(authUser?.id || '').trim();
-  if (!authId) return null;
-
-  if (isUuid(authId)) {
-    const existing = await pgPool.query(
-      `
-        SELECT id
-        FROM users
-        WHERE id = $1
-        LIMIT 1
-      `,
-      [authId],
-    );
-
-    if (existing.rowCount > 0) return existing.rows[0].id;
-
-    const inserted = await pgPool.query(
-      `
-        INSERT INTO users (id, github_id, username, email, avatar_url)
-        VALUES ($1, $2, $3, $4, $5)
-        RETURNING id
-      `,
-      [
-        authId,
-        null,
-        authUser?.username || 'unknown-user',
-        authUser?.email || null,
-        authUser?.avatar || null,
-      ],
-    );
-
-    return inserted.rows[0]?.id || null;
-  }
-
-  const upserted = await pgPool.query(
-    `
-      INSERT INTO users (github_id, username, email, avatar_url)
-      VALUES ($1, $2, $3, $4)
-      ON CONFLICT (github_id)
-      DO UPDATE
-      SET username = COALESCE(EXCLUDED.username, users.username),
-          email = COALESCE(EXCLUDED.email, users.email),
-          avatar_url = COALESCE(EXCLUDED.avatar_url, users.avatar_url),
-          updated_at = NOW()
-      RETURNING id
-    `,
-    [
-      authId,
-      authUser?.username || `github-${authId}`,
-      authUser?.email || null,
-      authUser?.avatar || null,
-    ],
-  );
-
-  return upserted.rows[0]?.id || null;
-}
 
 function inferRepositoryName({ source, fullName, githubRepo }) {
   if (githubRepo) return githubRepo;
@@ -109,6 +39,83 @@ function inferRepositoryOwner({ source, fullName, githubOwner }) {
   const parts = String(fullName || '').split('/').filter(Boolean);
   return parts[0] || 'unknown';
 }
+
+router.get('/cache/metrics', async (req, res, next) => {
+  try {
+    const authUser = getAuthUser(req);
+    if (!authUser?.id) {
+      return res.status(401).json({ error: 'Authentication required.' });
+    }
+
+    const metrics = getCacheMetricsSnapshot();
+    const readsTotal = metrics.readHit + metrics.readMiss;
+    const writesTotal = metrics.writeSuccess + metrics.writeError;
+    const invalidationsTotal = metrics.invalidationSuccess + metrics.invalidationFailure;
+
+    return res.status(200).json({
+      metrics,
+      summary: {
+        readsTotal,
+        writesTotal,
+        invalidationsTotal,
+        hitRatePercent:
+          readsTotal > 0 ? Number(((metrics.readHit / readsTotal) * 100).toFixed(2)) : null,
+      },
+      redis: {
+        status: redisClient?.status || 'unavailable',
+        connected: redisClient?.status === 'ready',
+      },
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/cache/metrics/history', async (req, res, next) => {
+  try {
+    const authUser = getAuthUser(req);
+    if (!authUser?.id) {
+      return res.status(401).json({ error: 'Authentication required.' });
+    }
+
+    const hoursParam = Math.max(1, Math.min(24, Number.parseInt(req.query.hours || '1', 10)));
+    const endSeconds = Math.floor(Date.now() / 1000);
+    const startSeconds = endSeconds - hoursParam * 3600;
+
+    const history = await getCacheMetricsHistory(startSeconds, endSeconds);
+    const retention = await getCacheMetricsRetentionStatus();
+
+    return res.status(200).json({
+      history,
+      retention,
+      query: { hoursParam, startSeconds, endSeconds },
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/cache/metrics/latest', async (req, res, next) => {
+  try {
+    const authUser = getAuthUser(req);
+    if (!authUser?.id) {
+      return res.status(401).json({ error: 'Authentication required.' });
+    }
+
+    const latest = await getLatestCacheMetrics();
+    const retention = await getCacheMetricsRetentionStatus();
+
+    return res.status(200).json({
+      latest,
+      retention,
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
 
 router.get('/', async (req, res, next) => {
   try {

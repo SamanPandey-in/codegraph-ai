@@ -145,4 +145,33 @@ export const dashboardService = {
       isStarred: data?.isStarred ?? data?.is_starred ?? false,
     };
   },
+
+  async getCacheMetrics() {
+    const { data } = await dashboardClient.get('/api/repositories/cache/metrics');
+
+    return {
+      metrics: {
+        readHit: Number(data?.metrics?.readHit) || 0,
+        readMiss: Number(data?.metrics?.readMiss) || 0,
+        readError: Number(data?.metrics?.readError) || 0,
+        writeSuccess: Number(data?.metrics?.writeSuccess) || 0,
+        writeError: Number(data?.metrics?.writeError) || 0,
+        invalidationSuccess: Number(data?.metrics?.invalidationSuccess) || 0,
+        invalidationFailure: Number(data?.metrics?.invalidationFailure) || 0,
+        invalidationKeysDeleted: Number(data?.metrics?.invalidationKeysDeleted) || 0,
+      },
+      summary: {
+        readsTotal: Number(data?.summary?.readsTotal) || 0,
+        writesTotal: Number(data?.summary?.writesTotal) || 0,
+        invalidationsTotal: Number(data?.summary?.invalidationsTotal) || 0,
+        hitRatePercent:
+          Number.isFinite(data?.summary?.hitRatePercent) ? data.summary.hitRatePercent : null,
+      },
+      redis: {
+        status: data?.redis?.status || 'unavailable',
+        connected: Boolean(data?.redis?.connected),
+      },
+      generatedAt: data?.generatedAt || null,
+    };
+  },
 };

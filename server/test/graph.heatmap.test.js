@@ -1,5 +1,6 @@
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
+import jwt from 'jsonwebtoken';
 
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
 process.env.DATABASE_URL =
@@ -17,7 +18,9 @@ async function settleWithTimeout(promise, timeoutMs = 3000) {
 
   try {
     await Promise.race([
-      promise.catch(() => undefined),
+      promise.catch((error) => {
+        throw error;
+      }),
       new Promise((resolve) => {
         timer = setTimeout(resolve, timeoutMs);
         timer.unref?.();
@@ -74,8 +77,7 @@ test('GET /api/graph/:jobId/heatmap returns nodes ordered by risk score', async 
     `
       INSERT INTO repositories (id, owner_id, source, full_name)
       VALUES ($1, $2, 'local', 'heatmap/repo')
-      ON CONFLICT (owner_id, full_name) DO UPDATE
-      SET full_name = EXCLUDED.full_name
+      ON CONFLICT DO NOTHING
     `,
     [repositoryId, userId],
   );
@@ -102,10 +104,15 @@ test('GET /api/graph/:jobId/heatmap returns nodes ordered by risk score', async 
   );
 
   try {
-    const response = await fetch(`${baseUrl}/api/graph/${jobId}/heatmap`);
+    const token = jwt.sign({ id: userId }, process.env.JWT_SECRET);
+    const response = await fetch(`${baseUrl}/api/graph/${jobId}/heatmap`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
     assert.equal(response.status, 200);
 
-    const payload = await response.json();
+    const payload = await response.clone().json();
     assert.equal(Array.isArray(payload.hotspots), true);
     assert.equal(payload.hotspots.length, 3);
 
@@ -121,4 +128,12 @@ test('GET /api/graph/:jobId/heatmap returns nodes ordered by risk score', async 
     await pgPool.query('DELETE FROM repositories WHERE id = $1', [repositoryId]);
     await pgPool.query('DELETE FROM users WHERE id = $1', [userId]);
   }
+});
+
+test('GET /api/graph/:jobId/heatmap rejects requests without authentication', async () => {
+  const response = await fetch(`${baseUrl}/api/graph/unknown-job/heatmap`);
+  assert.equal(response.status, 401);
+
+  const payload = await response.json();
+  assert.equal(payload.error, 'Authentication required.');
 });

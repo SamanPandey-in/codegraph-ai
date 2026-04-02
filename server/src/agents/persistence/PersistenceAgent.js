@@ -35,6 +35,7 @@ export class PersistenceAgent extends BaseAgent {
 
     const jobId = input?.jobId || context?.jobId;
     const graph = input?.graph || {};
+    const typedEdges = Array.isArray(input?.typedEdges) ? input.typedEdges : [];
     const edges = Array.isArray(input?.edges) ? input.edges : [];
     const functionNodes = input?.functionNodes || {};
     const embeddings = input?.embeddings || {};
@@ -79,7 +80,9 @@ export class PersistenceAgent extends BaseAgent {
     const edgeTargetPaths = [];
     const edgeTypes = [];
 
-    for (const edge of edges) {
+    const edgesToPersist = typedEdges.length > 0 ? typedEdges : edges;
+
+    for (const edge of edgesToPersist) {
       if (!edge?.source || !edge?.target) continue;
       edgeSourcePaths.push(edge.source);
       edgeTargetPaths.push(edge.target);
@@ -201,8 +204,7 @@ export class PersistenceAgent extends BaseAgent {
               unnest($2::text[]),
               unnest($3::text[]),
               unnest($4::text[])
-            ON CONFLICT (job_id, source_path, target_path) DO UPDATE
-            SET edge_type = EXCLUDED.edge_type
+            ON CONFLICT (job_id, source_path, target_path, edge_type) DO NOTHING
           `,
           [jobId, edgeSourcePaths, edgeTargetPaths, edgeTypes],
         );
