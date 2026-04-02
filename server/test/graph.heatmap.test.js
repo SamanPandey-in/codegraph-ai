@@ -1,5 +1,6 @@
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
+import jwt from 'jsonwebtoken';
 
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
 process.env.DATABASE_URL =
@@ -102,7 +103,12 @@ test('GET /api/graph/:jobId/heatmap returns nodes ordered by risk score', async 
   );
 
   try {
-    const response = await fetch(`${baseUrl}/api/graph/${jobId}/heatmap`);
+    const token = jwt.sign({ id: userId }, process.env.JWT_SECRET);
+    const response = await fetch(`${baseUrl}/api/graph/${jobId}/heatmap`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
     assert.equal(response.status, 200);
 
     const payload = await response.json();
@@ -121,4 +127,12 @@ test('GET /api/graph/:jobId/heatmap returns nodes ordered by risk score', async 
     await pgPool.query('DELETE FROM repositories WHERE id = $1', [repositoryId]);
     await pgPool.query('DELETE FROM users WHERE id = $1', [userId]);
   }
+});
+
+test('GET /api/graph/:jobId/heatmap rejects requests without authentication', async () => {
+  const response = await fetch(`${baseUrl}/api/graph/unknown-job/heatmap`);
+  assert.equal(response.status, 401);
+
+  const payload = await response.json();
+  assert.equal(payload.error, 'Authentication required.');
 });

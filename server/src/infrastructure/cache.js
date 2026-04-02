@@ -20,6 +20,32 @@ const REPOSITORY_JOBS_CACHE_TTL_SECONDS = Number.parseInt(
 
 const CACHE_VERSION = 'v1';
 
+const cacheMetrics = {
+  readHit: 0,
+  readMiss: 0,
+  readError: 0,
+  writeSuccess: 0,
+  writeError: 0,
+  invalidationSuccess: 0,
+  invalidationFailure: 0,
+  invalidationKeysDeleted: 0,
+};
+
+function bumpMetric(metric, amount = 1) {
+  if (!Object.prototype.hasOwnProperty.call(cacheMetrics, metric)) return;
+  cacheMetrics[metric] += amount;
+}
+
+export function getCacheMetricsSnapshot() {
+  return { ...cacheMetrics };
+}
+
+export function resetCacheMetrics() {
+  Object.keys(cacheMetrics).forEach((metric) => {
+    cacheMetrics[metric] = 0;
+  });
+}
+
 function withVersion(key) {
   return `cache:${CACHE_VERSION}:${key}`;
 }
@@ -33,6 +59,14 @@ function ttlWithJitter(ttlSeconds) {
   const base = normalizedTtl(ttlSeconds, 60);
   const jitter = Math.floor(base * 0.1 * Math.random());
   return base + jitter;
+}
+
+function logCacheWarning(operation, error, context = {}) {
+  const details = Object.entries(context)
+    .map(([key, value]) => `${key}=${value}`)
+    .join(' ');
+  const suffix = details ? ` ${details}` : '';
+  console.warn(`[cache:${operation}] ${error?.message || 'Cache operation failed.'}${suffix}`);
 }
 
 export function buildAnalysisHistoryCacheKey({ userId, page, limit }) {
@@ -52,12 +86,24 @@ export function buildRepositoryJobsCacheKey({ userId, repositoryId, page, limit 
 }
 
 export async function readJsonCache(redis, key) {
-  if (!redis || typeof redis.get !== 'function') return null;
+  if (!redis || typeof redis.get !== 'function') {
+    bumpMetric('readMiss');
+    return null;
+  }
 
   try {
     const raw = await redis.get(key);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
+    if (!raw) {
+      bumpMetric('readMiss');
+      return null;
+    }
+
+    const parsed = JSON.parse(raw);
+    bumpMetric('readHit');
+    return parsed;
+  } catch (error) {
+    bumpMetric('readError');
+    logCacheWarning('read', error, { key });
     return null;
   }
 }
@@ -68,8 +114,10 @@ export async function writeJsonCache(redis, key, payload, ttlSeconds) {
   try {
     const ttl = ttlWithJitter(ttlSeconds);
     await redis.set(key, JSON.stringify(payload), 'EX', ttl);
-  } catch {
-    // Cache writes are best-effort.
+    bumpMetric('writeSuccess');
+  } catch (error) {
+    bumpMetric('writeError');
+    logCacheWarning('write', error, { key });
   }
 }
 
@@ -77,9 +125,12 @@ export async function deleteCacheKey(redis, key) {
   if (!redis || typeof redis.del !== 'function') return;
 
   try {
-    await redis.del(key);
-  } catch {
-    // Cache invalidation is best-effort.
+    const deletedCount = Number(await redis.del(key)) || 0;
+    bumpMetric('invalidationSuccess');
+    bumpMetric('invalidationKeysDeleted', deletedCount);
+  } catch (error) {
+    bumpMetric('invalidationFailure');
+    logCacheWarning('delete', error, { key });
   }
 }
 
@@ -94,11 +145,14 @@ export async function deleteByPattern(redis, pattern) {
       cursor = nextCursor;
 
       if (Array.isArray(keys) && keys.length > 0) {
-        await redis.del(...keys);
+        const deletedCount = Number(await redis.del(...keys)) || 0;
+        bumpMetric('invalidationSuccess');
+        bumpMetric('invalidationKeysDeleted', deletedCount);
       }
     } while (cursor !== '0');
-  } catch {
-    // Cache invalidation is best-effort.
+  } catch (error) {
+    bumpMetric('invalidationFailure');
+    logCacheWarning('delete-pattern', error, { pattern });
   }
 }
 

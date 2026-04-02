@@ -1,11 +1,13 @@
 import { Router } from 'express';
 import crypto from 'node:crypto';
-import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
 import { pgPool } from '../../../infrastructure/connections.js';
 import { loadGraphPayloadByJobId } from '../services/graphPayload.service.js';
+import { ImpactAnalysisAgent } from '../../../agents/analysis/ImpactAnalysisAgent.js';
+import { getAuthUser, isUuid, resolveDatabaseUserId } from '../../../utils/authUser.js';
 
 const router = Router();
+const impactAgent = new ImpactAnalysisAgent();
 
 const SHARE_VISIBILITY = new Set(['unlisted', 'public']);
 
@@ -37,15 +39,38 @@ function buildShareUrl(token) {
   }
 }
 
-function getAuthUser(req) {
-  const token = req.cookies?.token || req.headers.authorization?.replace('Bearer ', '');
-  if (!token || !process.env.JWT_SECRET) return null;
-
-  try {
-    return jwt.verify(token, process.env.JWT_SECRET);
-  } catch {
+async function ensureOwnedJobAccess(req, res) {
+  const authUser = getAuthUser(req);
+  if (!authUser?.id) {
+    res.status(401).json({ error: 'Authentication required.' });
     return null;
   }
+
+  const userId = await resolveDatabaseUserId(authUser);
+  if (!userId) {
+    const error = new Error('Failed to resolve authenticated user record.');
+    error.statusCode = 500;
+    throw error;
+  }
+
+  const jobId = String(req.params?.jobId || '').trim();
+
+  const jobCheck = await pgPool.query(
+    `
+      SELECT id
+      FROM analysis_jobs
+      WHERE id = $1 AND user_id = $2
+      LIMIT 1
+    `,
+    [jobId, userId],
+  );
+
+  if (jobCheck.rowCount === 0) {
+    res.status(404).json({ error: 'Analysis job not found.' });
+    return null;
+  }
+
+  return { userId, authUser };
 }
 
 router.get('/:jobId/functions/*filePath', functionNodesLimiter, async (req, res, next) => {
@@ -70,6 +95,9 @@ router.get('/:jobId/functions/*filePath', functionNodesLimiter, async (req, res,
   }
 
   try {
+    const access = await ensureOwnedJobAccess(req, res);
+    if (!access) return;
+
     const result = await pgPool.query(
       `
         SELECT name, kind, calls, loc
@@ -93,9 +121,34 @@ router.get('/:jobId/functions/*filePath', functionNodesLimiter, async (req, res,
   }
 });
 
+router.get('/:jobId/impact', async (req, res, next) => {
+  const { jobId } = req.params;
+  const nodePath = String(req.query.node || '').trim();
+  const maxHops = Math.min(6, Math.max(1, Number.parseInt(req.query.hops || '6', 10)));
+
+  if (!nodePath) {
+    return res.status(400).json({ error: 'node query parameter is required.' });
+  }
+
+  try {
+    const access = await ensureOwnedJobAccess(req, res);
+    if (!access) return;
+
+    const result = await impactAgent.process({ jobId, nodePath, maxHops }, { jobId });
+
+    if (result.status === 'failed') {
+      return res.status(500).json({ error: result.errors?.[0]?.message || 'BFS failed.' });
+    }
+
+    return res.status(200).json(result.data);
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.post('/:jobId/share', shareLimiter, async (req, res, next) => {
   const authUser = getAuthUser(req);
-  if (!authUser) {
+  if (!authUser?.id) {
     return res.status(401).json({ error: 'Authentication required.' });
   }
 
@@ -123,6 +176,13 @@ router.post('/:jobId/share', shareLimiter, async (req, res, next) => {
   const token = crypto.randomBytes(24).toString('base64url');
 
   try {
+    const userId = await resolveDatabaseUserId(authUser);
+    if (!userId) {
+      const error = new Error('Failed to resolve authenticated user record.');
+      error.statusCode = 500;
+      throw error;
+    }
+
     // Verify the job belongs to the authenticated user
     const jobCheck = await pgPool.query(
       `
@@ -131,7 +191,7 @@ router.post('/:jobId/share', shareLimiter, async (req, res, next) => {
         WHERE id = $1 AND user_id = $2
         LIMIT 1
       `,
-      [jobId, authUser.id],
+      [jobId, userId],
     );
 
     if (jobCheck.rowCount === 0) {
@@ -169,6 +229,9 @@ router.get('/:jobId/heatmap', async (req, res, next) => {
   }
 
   try {
+    const access = await ensureOwnedJobAccess(req, res);
+    if (!access) return;
+
     const result = await pgPool.query(
       `
         SELECT file_path, file_type, metrics,
@@ -203,6 +266,9 @@ router.get('/:jobId', async (req, res, next) => {
   }
 
   try {
+    const access = await ensureOwnedJobAccess(req, res);
+    if (!access) return;
+
     const { payload, cacheStatus } = await loadGraphPayloadByJobId(jobId);
 
     if (!payload) {

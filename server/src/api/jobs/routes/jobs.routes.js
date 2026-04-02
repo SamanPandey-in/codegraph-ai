@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { pgPool, redisClient } from '../../../infrastructure/connections.js';
+import { getAuthUser, resolveDatabaseUserId } from '../../../utils/authUser.js';
 
 const router = Router();
 
@@ -8,6 +9,46 @@ router.get('/:jobId/stream', async (req, res, next) => {
 
   if (!jobId) {
     return res.status(400).json({ error: 'jobId is required.' });
+  }
+
+  const authUser = getAuthUser(req);
+  if (!authUser?.id) {
+    return res.status(401).json({ error: 'Authentication required.' });
+  }
+
+  let userId;
+
+  try {
+    userId = await resolveDatabaseUserId(authUser);
+    if (!userId) {
+      const error = new Error('Failed to resolve authenticated user record.');
+      error.statusCode = 500;
+      throw error;
+    }
+  } catch (error) {
+    return next(error);
+  }
+
+  let job;
+
+  try {
+    const jobQuery = await pgPool.query(
+      `
+        SELECT id, status, overall_confidence, file_count, node_count, edge_count, error_summary, agent_trace
+        FROM analysis_jobs
+        WHERE id = $1 AND user_id = $2
+        LIMIT 1
+      `,
+      [jobId, userId],
+    );
+
+    if (jobQuery.rowCount === 0) {
+      return res.status(404).json({ error: 'Job not found.' });
+    }
+
+    job = jobQuery.rows[0];
+  } catch (error) {
+    return next(error);
   }
 
   res.setHeader('Content-Type', 'text/event-stream');
@@ -45,22 +86,6 @@ router.get('/:jobId/stream', async (req, res, next) => {
   };
 
   try {
-    const jobQuery = await pgPool.query(
-      `
-        SELECT id, status, overall_confidence, file_count, node_count, edge_count, error_summary, agent_trace
-        FROM analysis_jobs
-        WHERE id = $1
-      `,
-      [jobId],
-    );
-
-    if (jobQuery.rowCount === 0) {
-      res.write(`event: error\ndata: ${JSON.stringify({ error: 'Job not found.' })}\n\n`);
-      await closeStream();
-      return;
-    }
-
-    const job = jobQuery.rows[0];
     res.write(
       `data: ${JSON.stringify({
         jobId,
