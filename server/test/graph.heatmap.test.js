@@ -18,7 +18,9 @@ async function settleWithTimeout(promise, timeoutMs = 3000) {
 
   try {
     await Promise.race([
-      promise.catch(() => undefined),
+      promise.catch((error) => {
+        throw error;
+      }),
       new Promise((resolve) => {
         timer = setTimeout(resolve, timeoutMs);
         timer.unref?.();
@@ -110,7 +112,7 @@ test('GET /api/graph/:jobId/heatmap returns nodes ordered by risk score', async 
     });
     assert.equal(response.status, 200);
 
-    const payload = await response.json();
+    const payload = await response.clone().json();
     assert.equal(Array.isArray(payload.hotspots), true);
     assert.equal(payload.hotspots.length, 3);
 
