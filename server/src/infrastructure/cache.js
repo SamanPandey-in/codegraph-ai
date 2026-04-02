@@ -1,3 +1,5 @@
+import { persistCacheMetricsSnapshot } from './cacheMetricsPersistence.js';
+
 const ANALYSIS_HISTORY_CACHE_TTL_SECONDS = Number.parseInt(
   process.env.ANALYSIS_HISTORY_CACHE_TTL_SECONDS || '60',
   10,
@@ -44,6 +46,45 @@ export function resetCacheMetrics() {
   Object.keys(cacheMetrics).forEach((metric) => {
     cacheMetrics[metric] = 0;
   });
+}
+
+/**
+ * Start periodic persistence of cache metrics to Redis (minute buckets)
+ * Called once on app startup; runs every 30 seconds to capture snapshots
+ * Gracefully handles Redis unavailability without crashing
+ *
+ * @returns {() => void} Cleanup function to stop the interval
+ */
+let metricsPersisteInterval = null;
+
+export function startCacheMetricsPersistence() {
+  if (metricsPersisteInterval !== null) {
+    // Already running
+    return () => {
+      if (metricsPersisteInterval) {
+        clearInterval(metricsPersisteInterval);
+        metricsPersisteInterval = null;
+      }
+    };
+  }
+
+  const PERSISTENCE_INTERVAL_MS = 30 * 1000; // 30 seconds
+
+  metricsPersisteInterval = setInterval(() => {
+    const snapshot = getCacheMetricsSnapshot();
+    persistCacheMetricsSnapshot(snapshot).catch((err) => {
+      // Should be caught inside persistCacheMetricsSnapshot, but log if not
+      console.error('[cache-metrics] Unexpected persistence error:', err?.message);
+    });
+  }, PERSISTENCE_INTERVAL_MS);
+
+  // Return cleanup function
+  return () => {
+    if (metricsPersisteInterval) {
+      clearInterval(metricsPersisteInterval);
+      metricsPersisteInterval = null;
+    }
+  };
 }
 
 function withVersion(key) {
