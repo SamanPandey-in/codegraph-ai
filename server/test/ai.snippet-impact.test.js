@@ -132,8 +132,7 @@ test('POST /api/ai/snippet-impact returns 503 when AI provider is not configured
     `
       INSERT INTO repositories (id, owner_id, source, full_name)
       VALUES ($1, $2, 'local', 'snippet/repo')
-      ON CONFLICT (owner_id, full_name) DO UPDATE
-      SET full_name = EXCLUDED.full_name
+      ON CONFLICT DO NOTHING
     `,
     [repositoryId, userId],
   );
@@ -162,7 +161,7 @@ test('POST /api/ai/snippet-impact returns 503 when AI provider is not configured
     `
       INSERT INTO graph_edges (job_id, source_path, target_path, edge_type)
       VALUES ($1, 'src/file-b.js', 'src/file-a.js', 'import')
-      ON CONFLICT (job_id, source_path, target_path) DO NOTHING
+      ON CONFLICT DO NOTHING
     `,
     [jobId],
   );
