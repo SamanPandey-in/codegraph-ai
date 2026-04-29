@@ -2,63 +2,74 @@
  * Thresholds for choosing Neo4j over Postgres as the primary graph store.
  */
 const THRESHOLDS = {
-  NODE_COUNT: parseInt(process.env.NEO4J_THRESHOLD_NODES ?? '500', 10),
-  EDGE_COUNT: parseInt(process.env.NEO4J_THRESHOLD_EDGES ?? '2000', 10),
-  DENSITY: parseFloat(process.env.NEO4J_THRESHOLD_DENSITY ?? '0.05'),
-  CYCLES: parseInt(process.env.NEO4J_THRESHOLD_CYCLES ?? '20', 10),
+  NODE_COUNT: Number.parseInt(process.env.NEO4J_THRESHOLD_NODES ?? "500", 10),
+  EDGE_COUNT: Number.parseInt(process.env.NEO4J_THRESHOLD_EDGES ?? "2000", 10),
+  DENSITY: Number.parseFloat(process.env.NEO4J_THRESHOLD_DENSITY ?? "0.05"),
+  CYCLES: Number.parseInt(process.env.NEO4J_THRESHOLD_CYCLES ?? "20", 10),
+  IMPACT_HOPS: 5,
+  LARGE_CYCLE_SIZE: 50,
+  RELATIONSHIP_TYPES: 3,
 };
 
 /**
  * Dynamically selects the database backend based on graph topology metrics.
  *
- * @param {Object} topology - Metrics from GraphBuilderAgent (nodeCount, edgeCount, cyclesDetected).
+ * @param {Object} topology - Metrics from GraphBuilderAgent.
  * @param {Object} options - Manual overrides (forceNeo4j, forcePostgres).
  * @returns {Object} { db: 'neo4j' | 'postgres', reasons: string[] }
  */
 export function selectDatabase(topology, options = {}) {
   const reasons = [];
+  const safeTopology = topology && typeof topology === "object" ? topology : {};
 
-  // Manual Overrides
-  if (options.forceNeo4j) return { db: 'neo4j', reasons: ['manual override'] };
-  if (options.forcePostgres) return { db: 'postgres', reasons: ['manual override'] };
+  if (options.forceNeo4j) return { db: "neo4j", reasons: ["manual override"] };
+  if (options.forcePostgres)
+    return { db: "postgres", reasons: ["manual override"] };
 
-  // Hard environment check
-  if (!process.env.NEO4J_URI || !process.env.NEO4J_PASSWORD) {
-    return { db: 'postgres', reasons: ['NEO4J_URI/PASSWORD not configured'] };
-  }
+  const {
+    nodeCount = 0,
+    edgeCount = 0,
+    cyclesDetected = 0,
+    relationshipTypeCount = 0,
+    distinctRelationshipTypes = 0,
+    largestCycleSize = 0,
+    maxCycleSize = 0,
+  } = safeTopology;
 
-  const { nodeCount = 0, edgeCount = 0, cyclesDetected = 0 } = topology;
-
-  // Density formula: edges / (nodes * (nodes - 1))
   const density = edgeCount / (nodeCount * (nodeCount - 1) || 1);
+  const resolvedRelationshipTypeCount = Math.max(
+    Number(relationshipTypeCount) || 0,
+    Number(distinctRelationshipTypes) || 0,
+  );
+  const resolvedLargestCycleSize = Math.max(
+    Number(largestCycleSize) || 0,
+    Number(maxCycleSize) || 0,
+  );
 
-  // Threshold checks
   if (nodeCount >= THRESHOLDS.NODE_COUNT) {
-    reasons.push(`nodeCount ${nodeCount} >= ${THRESHOLDS.NODE_COUNT}`);
+    reasons.push("nodeCount");
   }
   if (edgeCount >= THRESHOLDS.EDGE_COUNT) {
-    reasons.push(`edgeCount ${edgeCount} >= ${THRESHOLDS.EDGE_COUNT}`);
+    reasons.push("edgeCount");
   }
   if (density >= THRESHOLDS.DENSITY) {
-    reasons.push(`density ${density.toFixed(4)} >= ${THRESHOLDS.DENSITY}`);
+    reasons.push("density");
   }
   if (cyclesDetected >= THRESHOLDS.CYCLES) {
-    reasons.push(`cycles ${cyclesDetected} >= ${THRESHOLDS.CYCLES}`);
+    reasons.push("cyclesDetected");
   }
-
-  // Hard override triggers from user request
-  if (options.impactAnalysisDepth > 5) {
-    reasons.push('impact analysis > 5 hops');
+  if (Number(options.impactAnalysisDepth) > THRESHOLDS.IMPACT_HOPS) {
+    reasons.push("impactAnalysisDepth");
   }
-  if (topology.largeCycles > 50) {
-    reasons.push('circular cycles > 50 nodes');
+  if (resolvedLargestCycleSize > THRESHOLDS.LARGE_CYCLE_SIZE) {
+    reasons.push("largestCycleSize");
   }
-  if (topology.distinctRelationshipTypes > 3) {
-    reasons.push('distinct relationship types > 3');
+  if (resolvedRelationshipTypeCount > THRESHOLDS.RELATIONSHIP_TYPES) {
+    reasons.push("relationshipTypeCount");
   }
 
   return {
-    db: reasons.length > 0 ? 'neo4j' : 'postgres',
+    db: reasons.length > 0 ? "neo4j" : "postgres",
     reasons,
   };
 }

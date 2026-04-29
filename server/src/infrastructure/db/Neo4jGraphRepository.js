@@ -1,39 +1,48 @@
-import { IGraphRepository } from './IGraphRepository.js';
-import { PostgresGraphRepository } from './PostgresGraphRepository.js';
+import { IGraphRepository } from "./IGraphRepository.js";
+import { PostgresGraphRepository } from "./PostgresGraphRepository.js";
+import { pgPool as defaultPgPool } from "../connections.js";
 
 const VALID_RELATIONSHIPS = new Set([
-  'IMPORTS',
-  'CALLS',
-  'EXPOSES_API',
-  'CONSUMES_API',
-  'USES_TABLE',
-  'USES_FIELD',
-  'EMITS_EVENT',
-  'LISTENS_EVENT',
+  "IMPORTS",
+  "CALLS",
+  "EXPOSES_API",
+  "CONSUMES_API",
+  "USES_TABLE",
+  "USES_FIELD",
+  "EMITS_EVENT",
+  "LISTENS_EVENT",
 ]);
 
 const LABEL_MAP = {
-  EXPOSES_API: 'ApiEndpoint',
-  CONSUMES_API: 'ApiEndpoint',
-  USES_TABLE: 'DatabaseTable',
-  USES_FIELD: 'DatabaseField',
-  EMITS_EVENT: 'EventChannel',
-  LISTENS_EVENT: 'EventChannel',
-  IMPORTS: 'CodeFile',
-  CALLS: 'Symbol',
+  EXPOSES_API: "ApiEndpoint",
+  CONSUMES_API: "ApiEndpoint",
+  USES_TABLE: "DatabaseTable",
+  USES_FIELD: "DatabaseField",
+  EMITS_EVENT: "EventChannel",
+  LISTENS_EVENT: "EventChannel",
+  IMPORTS: "CodeFile",
+  CALLS: "Symbol",
 };
 
 export class Neo4jGraphRepository extends IGraphRepository {
-  constructor({ driver, pgPool }) {
+  constructor(driverOrOptions = {}) {
     super();
-    this.driver = driver;
-    // We delegate non-graph persistence to the Postgres repository
-    this.pgRepo = new PostgresGraphRepository(pgPool);
+    const options =
+      driverOrOptions &&
+      typeof driverOrOptions === "object" &&
+      "session" in driverOrOptions
+        ? { driver: driverOrOptions }
+        : driverOrOptions;
+
+    this.driver = options.driver;
+    this.pgRepo =
+      options.pgRepo ||
+      new PostgresGraphRepository(options.pgPool || defaultPgPool);
   }
 
   async persistGraph(params) {
     const { jobId, graph = {}, typedEdges = [], topology = {} } = params;
-    
+
     // 1. Persist everything to Postgres first (as the "always" primary)
     await this.pgRepo.persistGraph(params);
 
@@ -46,11 +55,11 @@ export class Neo4jGraphRepository extends IGraphRepository {
          SET j.repositoryId = $repositoryId, j.status = $status, j.nodeCount = $nodeCount, j.edgeCount = $edgeCount`,
         {
           jobId,
-          repositoryId: params.repositoryId || 'unknown',
-          status: 'completed',
+          repositoryId: params.repositoryId || "unknown",
+          status: "completed",
           nodeCount: topology.nodeCount || 0,
           edgeCount: topology.edgeCount || 0,
-        }
+        },
       );
 
       // 2.2 CodeFile nodes
@@ -59,19 +68,21 @@ export class Neo4jGraphRepository extends IGraphRepository {
       const fileBatchSize = 100;
 
       for (let i = 0; i < fileEntries.length; i += fileBatchSize) {
-        const batch = fileEntries.slice(i, i + fileBatchSize).map(([path, node]) => ({
-          path,
-          type: node?.type || 'module',
-          language: node?.language || 'unknown',
-          isDead: deadCodeSet.has(path),
-          jobId,
-        }));
+        const batch = fileEntries
+          .slice(i, i + fileBatchSize)
+          .map(([path, node]) => ({
+            path,
+            type: node?.type || "module",
+            language: node?.language || "unknown",
+            isDead: deadCodeSet.has(path),
+            jobId,
+          }));
 
         await session.run(
           `UNWIND $batch AS item
            MERGE (f:CodeFile { jobId: item.jobId, path: item.path })
            SET f.type = item.type, f.language = item.language, f.isDead = item.isDead`,
-          { batch }
+          { batch },
         );
       }
 
@@ -87,13 +98,13 @@ export class Neo4jGraphRepository extends IGraphRepository {
         }
 
         for (const [relType, typeEdges] of Object.entries(byType)) {
-          const targetLabel = LABEL_MAP[relType] || 'Node';
+          const targetLabel = LABEL_MAP[relType] || "Node";
           await session.run(
             `UNWIND $edges AS e
              MERGE (src:CodeFile { jobId: $jobId, path: e.source })
              MERGE (tgt:${targetLabel} { jobId: $jobId, path: e.target })
              MERGE (src)-[r:\`${relType}\` { jobId: $jobId }]->(tgt)`,
-            { edges: typeEdges, jobId }
+            { edges: typeEdges, jobId },
           );
         }
       }
@@ -110,9 +121,9 @@ export class Neo4jGraphRepository extends IGraphRepository {
                       -[:IMPORTS*1..${n}]->(dep:CodeFile { jobId: $jobId })
          RETURN DISTINCT dep.path AS path, length(path) AS depth
          ORDER BY depth, dep.path`,
-        { jobId, filePath }
+        { jobId, filePath },
       );
-      return result.records.map((r) => r.get('path'));
+      return result.records.map((r) => r.get("path"));
     } finally {
       await session.close();
     }
@@ -126,9 +137,9 @@ export class Neo4jGraphRepository extends IGraphRepository {
                        (changed:CodeFile { jobId: $jobId, path: $filePath })
          RETURN DISTINCT dep.path AS path, length(path) AS depth
          ORDER BY depth, dep.path`,
-        { jobId, filePath }
+        { jobId, filePath },
       );
-      return result.records.map((r) => r.get('path'));
+      return result.records.map((r) => r.get("path"));
     } finally {
       await session.close();
     }
@@ -137,7 +148,7 @@ export class Neo4jGraphRepository extends IGraphRepository {
   async healthCheck() {
     const session = this.driver.session();
     try {
-      await session.run('RETURN 1');
+      await session.run("RETURN 1");
       return true;
     } finally {
       await session.close();
@@ -148,10 +159,9 @@ export class Neo4jGraphRepository extends IGraphRepository {
     const session = this.driver.session();
     try {
       // Detach delete all nodes associated with the jobId
-      await session.run(
-        `MATCH (n { jobId: $jobId }) DETACH DELETE n`,
-        { jobId }
-      );
+      await session.run(`MATCH (n { jobId: $jobId }) DETACH DELETE n`, {
+        jobId,
+      });
     } finally {
       await session.close();
     }

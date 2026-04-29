@@ -10,7 +10,7 @@ export function getNeo4jDriver() {
   if (_driver) return _driver;
 
   const uri = process.env.NEO4J_URI || 'bolt://localhost:7687';
-  const user = process.env.NEO4J_USER || 'neo4j';
+  const user = process.env.NEO4J_USERNAME || 'neo4j';
   const password = process.env.NEO4J_PASSWORD || 'neo4j';
 
   _driver = neo4j.driver(uri, neo4j.auth.basic(user, password), {

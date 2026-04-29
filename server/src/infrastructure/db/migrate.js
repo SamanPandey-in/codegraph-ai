@@ -1,6 +1,11 @@
 import path from 'path';
 import { promises as fs } from 'fs';
+import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
 import { getNeo4jDriver } from './neo4jDriver.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.join(__dirname, '../../../.env') });
 
 const MIGRATIONS_DIR = path.join(process.cwd(), 'src/infrastructure/db/migrations');
 
@@ -74,7 +79,8 @@ export async function runMigrations() {
       const stmts = cypher
         .split(/\r?\n\r?\n+/)
         .map((s) => s.trim())
-        .filter(Boolean);
+        .filter(Boolean)
+        .filter((s) => !s.startsWith('//') && !s.startsWith('/*'));
 
       for (const stmt of stmts) {
         try {
