@@ -55,6 +55,11 @@ async function ensureOwnedJobAccess(req, res) {
 
   const jobId = String(req.params?.jobId || '').trim();
 
+  if (!isUuid(jobId)) {
+    res.status(404).json({ error: 'Analysis job not found.' });
+    return null;
+  }
+
   const jobCheck = await pgPool.query(
     `
       SELECT id
