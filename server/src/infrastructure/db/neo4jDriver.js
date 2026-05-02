@@ -14,9 +14,11 @@ export function getNeo4jDriver() {
   const password = process.env.NEO4J_PASSWORD || 'neo4j';
 
   _driver = neo4j.driver(uri, neo4j.auth.basic(user, password), {
-    maxConnectionPoolSize: 50,
-    connectionAcquisitionTimeout: 30_000,
-    connectionTimeout: 10_000,
+    maxConnectionPoolSize: 25,
+    connectionAcquisitionTimeout: 60_000,
+    connectionTimeout: 30_000,
+    // Keep connections warm — Aura idles them out faster than local
+    connectionLivenessCheckTimeout: 30_000,
   });
 
   return _driver;
