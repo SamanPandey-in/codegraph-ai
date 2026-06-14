@@ -341,17 +341,46 @@ export default function AnalyzeFilePage() {
     [fileState.data?.path, selectedFilePath],
   );
 
-  const highlightedContent = useMemo(() => {
-    const value = String(fileState.data?.content || '');
-    const grammar = Prism.languages[codeLanguage] || Prism.languages.clike;
-    return Prism.highlight(value, grammar, codeLanguage);
-  }, [codeLanguage, fileState.data?.content]);
-
   const highlightedLines = useMemo(() => {
     const raw = String(fileState.data?.content || '');
     const grammar = Prism.languages[codeLanguage] || Prism.languages.clike;
     return raw.split('\n').map((line) => Prism.highlight(line || '\n', grammar, codeLanguage));
   }, [codeLanguage, fileState.data?.content]);
+
+  const lineHighlightRanges = useMemo(() => {
+    const ranges = Array.isArray(snippetState.highlightRanges) ? snippetState.highlightRanges : [];
+    return ranges
+      .map((range) => {
+        if (Array.isArray(range) && range.length >= 2) {
+          const start = Number.parseInt(range[0], 10);
+          const end = Number.parseInt(range[1], 10);
+          if (Number.isFinite(start) && Number.isFinite(end)) {
+            return [Math.min(start, end), Math.max(start, end)];
+          }
+        }
+
+        if (range && typeof range === 'object') {
+          const start = Number.parseInt(range.start ?? range[0], 10);
+          const end = Number.parseInt(range.end ?? range[1] ?? range.start ?? range[0], 10);
+          if (Number.isFinite(start) && Number.isFinite(end)) {
+            return [Math.min(start, end), Math.max(start, end)];
+          }
+        }
+
+        return null;
+      })
+      .filter(Boolean);
+  }, [snippetState.highlightRanges]);
+
+  const isLineHighlighted = (lineNumber) => {
+    if (snippetState.lineStart && snippetState.lineEnd) {
+      const start = Math.min(snippetState.lineStart, snippetState.lineEnd);
+      const end = Math.max(snippetState.lineStart, snippetState.lineEnd);
+      if (lineNumber >= start && lineNumber <= end) return true;
+    }
+
+    return lineHighlightRanges.some(([start, end]) => lineNumber >= start && lineNumber <= end);
+  };
 
   const viewerLineCount = useMemo(() => {
     const value = String(fileState.data?.content || '');
@@ -636,6 +665,11 @@ export default function AnalyzeFilePage() {
   };
 
   const handleLineSelectionClick = (lineStart, lineEnd, event) => {
+    const activeSelection = window.getSelection?.();
+    if (activeSelection && String(activeSelection.toString() || '').trim()) {
+      return;
+    }
+
     const offsets = getOffsetsForLineRange(lineStart, lineEnd);
     if (!offsets || offsets.end <= offsets.start) {
       triggerSnippetAnalysis({ snippet: '', lineStart: null, lineEnd: null, shouldAnalyze: false });
@@ -686,6 +720,7 @@ export default function AnalyzeFilePage() {
       selectedSnippet: normalizedSnippet,
       lineStart: Number.isInteger(lineStart) ? lineStart : null,
       lineEnd: Number.isInteger(lineEnd) ? lineEnd : null,
+      highlightRanges: Number.isInteger(lineStart) && Number.isInteger(lineEnd) ? [[lineStart, lineEnd]] : [],
     };
 
     if (!shouldAnalyze) {
@@ -800,11 +835,22 @@ export default function AnalyzeFilePage() {
           // best-effort; ignore
         }
 
+        const impactLineRanges = Array.isArray(impactData?.impactedNodes)
+          ? impactData.impactedNodes
+              .flatMap((node) => {
+                const sourceLines = Array.isArray(node?.lines?.source) ? [node.lines.source] : [];
+                const targetLines = Array.isArray(node?.lines?.target) ? [node.lines.target] : [];
+                return [...sourceLines, ...targetLines];
+              })
+              .filter((range) => Array.isArray(range) && range.length >= 2)
+          : [];
+
         setSnippetState({
           status: 'succeeded',
           error: '',
           notice: '',
           ...basePayload,
+          highlightRanges: [...basePayload.highlightRanges, ...impactLineRanges],
           data: { ...result, impactedNodes: (impactData && impactData.impactedNodes) || null },
         });
         if (!isSnippetPopoverPinned) {
@@ -1283,17 +1329,40 @@ export default function AnalyzeFilePage() {
                       >
                         {Array.from({ length: viewerLineCount }, (_, i) => i + 1).join('\n')}
                       </pre>
-                      <pre
+                      <div
                         ref={viewerCodeRef}
                         onMouseUp={handleViewerSelection}
                         onKeyUp={handleViewerSelection}
-                        className="min-w-max flex-1 px-4 py-3 font-mono text-xs leading-5 overflow-visible whitespace-pre"
+                        className="min-w-max flex-1 px-4 py-3 font-mono text-xs leading-5 overflow-visible"
                       >
-                        <code
-                          className={`language-${codeLanguage}`}
-                          dangerouslySetInnerHTML={{ __html: highlightedContent }}
-                        />
-                      </pre>
+                        {highlightedLines.map((lineHtml, index) => {
+                          const lineNumber = index + 1;
+                          const highlighted = isLineHighlighted(lineNumber);
+
+                          return (
+                            <div
+                              key={`${fileState.data?.path || selectedFilePath}-${lineNumber}`}
+                              role="button"
+                              tabIndex={0}
+                              onClick={(event) => handleLineSelectionClick(lineNumber, lineNumber, event)}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                  event.preventDefault();
+                                  handleLineSelectionClick(lineNumber, lineNumber, event);
+                                }
+                              }}
+                              className={`flex w-full cursor-pointer items-stretch gap-3 rounded-md px-1 py-0.5 text-left transition-colors ${highlighted ? 'bg-primary/10' : 'hover:bg-muted/40'}`}
+                            >
+                              <span className="min-w-0 flex-1 whitespace-pre">
+                                <code
+                                  className={`language-${codeLanguage}`}
+                                  dangerouslySetInnerHTML={{ __html: lineHtml || '&nbsp;' }}
+                                />
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                 )}

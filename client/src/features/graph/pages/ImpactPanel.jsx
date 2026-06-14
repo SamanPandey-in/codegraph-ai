@@ -31,6 +31,9 @@ function NodeRow({ node, color }) {
     <div className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-mono ${color}`}>
       <ChevronRight className="size-3 shrink-0 opacity-60" />
       <span className="truncate">{node.path}</span>
+      <span className="shrink-0 rounded-full border border-current/20 bg-background/60 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.16em] opacity-80">
+        {String(node.relationshipType || 'IMPORTS')}
+      </span>
       <span className="ml-auto shrink-0 opacity-50">depth {node.depth}</span>
     </div>
   );

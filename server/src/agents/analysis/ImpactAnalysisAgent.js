@@ -47,10 +47,14 @@ async function bfsNeo4j(jobId, startNode, maxHops) {
       `MATCH path = (impacted:CodeFile { jobId: $jobId })
                     -[:IMPORTS*1..${maxHops}]->
                     (start:CodeFile { jobId: $jobId, path: $startNode })
+       WITH path, impacted, head(relationships(path)) AS rel
        RETURN DISTINCT
          impacted.path       AS path,
          length(path)        AS depth,
-         labels(impacted)[0] AS nodeType
+         labels(impacted)[0] AS nodeType,
+         type(rel)           AS relationshipType,
+         rel.source_lines    AS sourceLines,
+         rel.target_lines    AS targetLines
        ORDER BY depth ASC`,
       { jobId, startNode },
     );
@@ -59,6 +63,11 @@ async function bfsNeo4j(jobId, startNode, maxHops) {
       path:     String(record.get('path') || ''),
       depth:    toNumber(record.get('depth'), 0),
       nodeType: String(record.get('nodeType') || 'CodeFile'),
+      relationshipType: String(record.get('relationshipType') || 'IMPORTS'),
+      lines: {
+        source: record.get('sourceLines') || null,
+        target: record.get('targetLines') || null,
+      },
     }));
 
     return { nodes, source: 'neo4j' };
@@ -106,7 +115,7 @@ async function bfsPostgres(jobId, startNode, maxHops) {
             path: dep,
             depth,
             nodeType: 'CodeFile',
-            via: depEntry.type || 'import',
+            relationshipType: String(depEntry.type || 'IMPORTS').toUpperCase(),
             lines: {
               source: depEntry.source_lines || null,
               target: depEntry.target_lines || null,
@@ -219,6 +228,7 @@ export class ImpactAnalysisAgent extends BaseAgent {
       data: {
         startNode:     nodePath,
         impactedNodes: result.nodes,
+        impactedFiles: result.nodes.map((node) => node.path),
         direct,
         nearTransitive,
         farTransitive,
