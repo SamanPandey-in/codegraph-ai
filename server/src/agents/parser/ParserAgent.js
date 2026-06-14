@@ -5,6 +5,13 @@ import pLimit from 'p-limit';
 import { BaseAgent } from '../core/BaseAgent.js';
 import { scoreParser } from '../core/confidence.js';
 
+const LANGUAGE_WORKERS = new Map([
+  ['.py', './pythonWorker.js'],
+  ['.go', './goWorker.js'],
+  ['.java', './javaWorker.js'],
+  ['.rs', './rustWorker.js'],
+]);
+
 function normalizeRelative(filePath, rootDir) {
   return path.relative(rootDir, filePath).replace(/\\/g, '/');
 }
@@ -108,11 +115,7 @@ export class ParserAgent extends BaseAgent {
 
   _parseInWorker(filePath, relativePath) {
     const ext = path.extname(filePath).toLowerCase();
-    const workerFile = ext === '.py'
-      ? './pythonWorker.js'
-      : ext === '.go'
-        ? './goWorker.js'
-        : './parseWorker.js';
+    const workerFile = LANGUAGE_WORKERS.get(ext) || './parseWorker.js';
 
     return new Promise((resolve) => {
       const worker = new Worker(new URL(workerFile, import.meta.url), {
