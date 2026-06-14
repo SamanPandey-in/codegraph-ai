@@ -40,6 +40,7 @@ export default function AnalyzePage() {
   const selectedRepository = useSelector(selectAnalyzeSelectedRepository);
   const structure = useSelector(selectAnalyzeStructure);
   const contents = useSelector(selectAnalyzeContents);
+  const isLocalRepository = selectedRepository?.source === 'local';
 
   const routeDirectory = useMemo(() => {
     const raw = params.dir_name ? decodeURIComponent(params.dir_name) : '';
@@ -55,15 +56,16 @@ export default function AnalyzePage() {
   const isFirstAnalyzePage = !routeDirectory;
 
   useEffect(() => {
+    if (isLocalRepository) return;
     dispatch(fetchRepositoryStructure());
-  }, [dispatch]);
+  }, [dispatch, isLocalRepository]);
 
   useEffect(() => {
-    if (!routeDirectory) return;
+    if (!routeDirectory || isLocalRepository) return;
     dispatch(fetchDirectoryContents({ path: currentPath }));
-  }, [currentPath, dispatch, routeDirectory]);
+  }, [currentPath, dispatch, isLocalRepository, routeDirectory]);
 
-  const showLocalSourceMessage = selectedRepository?.source === 'local';
+  const showLocalSourceMessage = isLocalRepository;
 
   const handleCardOpen = (directoryPath) => {
     const encoded = encodeURIComponent(directoryPath);
@@ -142,19 +144,19 @@ export default function AnalyzePage() {
         </div>
       )}
 
-      {!routeDirectory && structure.status === 'loading' && (
+      {!showLocalSourceMessage && !routeDirectory && structure.status === 'loading' && (
         <div className="mt-6 rounded-xl border border-border/60 bg-card/60 px-4 py-8 text-center text-sm text-muted-foreground">
           Loading repository directories...
         </div>
       )}
 
-      {!routeDirectory && structure.status === 'failed' && structure.error && (
+      {!showLocalSourceMessage && !routeDirectory && structure.status === 'failed' && structure.error && (
         <div className="mt-6 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {structure.error}
         </div>
       )}
 
-      {!routeDirectory && structure.status === 'succeeded' && (
+      {!showLocalSourceMessage && !routeDirectory && structure.status === 'succeeded' && (
         <>
         <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {structure.directories.map((directory) => (
@@ -227,7 +229,7 @@ export default function AnalyzePage() {
         </>
       )}
 
-      {routeDirectory && (
+      {routeDirectory && !showLocalSourceMessage && (
         <div className="mt-6 rounded-2xl shadow-neu-inset border-none bg-background/40">
           <div className="border-b border-border/10 px-5 py-4">
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60">Repository explorer</p>

@@ -25,6 +25,7 @@
     "axios": "^1.6.8",
     "bcrypt": "^6.0.0",
     "bullmq": "^5.71.1",
+    "chokidar": "^4.0.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",

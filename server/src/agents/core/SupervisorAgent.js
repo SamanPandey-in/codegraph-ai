@@ -17,6 +17,7 @@ import { JobStatusEmitter } from './JobStatusEmitter.js';
 import { decideConfidence, computeOverallConfidence } from './confidence.js';
 import GitHubPRService from '../../services/GitHubPRService.js';
 import ImpactAnalysisService from '../../services/ImpactAnalysisService.js';
+import { startLocalWatch } from '../../analyze/services/localWatcher.service.js';
 import {
   buildGraphCacheKey,
   deleteCacheKey,
@@ -250,6 +251,13 @@ export class SupervisorAgent {
         nodeCount: Object.keys(pipelineData.graph || {}).length,
         edgeCount: pipelineData.edges?.length || 0,
       });
+
+      if (input?.source === 'local' && input?.repositoryId && input?.localPath) {
+        startLocalWatch(String(input.repositoryId), input.localPath, {
+          repositoryId: input.repositoryId,
+          userId: input.userId || null,
+        });
+      }
 
       await this._tryPostPRComment(jobId, input);
       await this.agents.ingestion.cleanup(pipelineData.tempRoot);

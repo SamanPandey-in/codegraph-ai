@@ -1131,7 +1131,7 @@ export default function DashboardPage() {
                           {expandedRepos[repo.id] ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
                         </Button>
 
-                        {graphLink ? (
+                        {graphLink && repo.source !== 'local' ? (
                           <Button
                             type="button"
                             size="sm"

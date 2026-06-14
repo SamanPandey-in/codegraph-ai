@@ -4,9 +4,19 @@ import express from 'express';
 import bodyParser from 'body-parser';
 import cookieParser from 'cookie-parser';
 
+const { stopLocalWatchMock, isWatchingMock } = vi.hoisted(() => ({
+  stopLocalWatchMock: vi.fn(),
+  isWatchingMock: vi.fn(),
+}));
+
 vi.mock('../src/analyze/services/localPicker.service.js', () => ({
   getLocalPickerCapabilities: vi.fn(async () => ({ canBrowse: true })),
   pickLocalDirectory: vi.fn(async () => 'C:\\projects\\repo'),
+}));
+
+vi.mock('../src/analyze/services/localWatcher.service.js', () => ({
+  stopLocalWatch: stopLocalWatchMock,
+  isWatching: isWatchingMock,
 }));
 
 vi.mock('../src/analyze/services/analyze.service.js', () => ({
@@ -28,6 +38,7 @@ describe('local picker endpoints', () => {
   });
 
   afterEach(() => {
+    vi.clearAllMocks();
     vi.restoreAllMocks();
     server.close();
   });
@@ -68,5 +79,35 @@ describe('local picker endpoints', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.ok).toBe(true);
+  });
+
+  it('stops a watched local repo', async () => {
+    isWatchingMock.mockReturnValue(true);
+
+    await new Promise((res) => server.listen(0, res));
+    const { port } = server.address();
+    const baseUrl = `http://localhost:${port}`;
+
+    const res = await fetch(`${baseUrl}/api/analyze/local/repo-123/watch`, {
+      method: 'DELETE',
+    });
+
+    expect(res.status).toBe(200);
+    expect(stopLocalWatchMock).toHaveBeenCalledWith('repo-123');
+  });
+
+  it('returns 404 when stopping an unknown watcher', async () => {
+    isWatchingMock.mockReturnValue(false);
+
+    await new Promise((res) => server.listen(0, res));
+    const { port } = server.address();
+    const baseUrl = `http://localhost:${port}`;
+
+    const res = await fetch(`${baseUrl}/api/analyze/local/missing/watch`, {
+      method: 'DELETE',
+    });
+
+    expect(res.status).toBe(404);
+    expect(stopLocalWatchMock).not.toHaveBeenCalled();
   });
 });
