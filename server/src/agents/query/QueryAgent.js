@@ -5,7 +5,10 @@ import { createChatClient, createEmbeddingClient } from '../../services/ai/llmPr
 
 const CACHE_TTL_SECONDS = Number(process.env.AI_CACHE_TTL_SECONDS || 3600);
 const SEMANTIC_CANDIDATE_LIMIT = 20;
+const CHUNK_CANDIDATE_LIMIT = 20;
 const CONTEXT_LIMIT = 8;
+const CHUNK_CONTEXT_LIMIT = 2;
+const CHUNK_SNIPPET_LIMIT = 900;
 
 function normalizeQuestion(value) {
   return String(value || '').trim();
@@ -57,6 +60,14 @@ function sanitizeHighlights(filePaths) {
   return [...new Set(normalized)].slice(0, CONTEXT_LIMIT);
 }
 
+function formatChunkLocation(chunk) {
+  if (Number.isFinite(Number(chunk.start_line)) && Number.isFinite(Number(chunk.end_line))) {
+    return `Lines ${chunk.start_line}-${chunk.end_line}`;
+  }
+
+  return `Chunk ${Number(chunk.chunk_index || 0) + 1}`;
+}
+
 function buildContextLine(candidate) {
   const declarations = Array.isArray(candidate.declarations)
     ? candidate.declarations
@@ -65,12 +76,19 @@ function buildContextLine(candidate) {
         .slice(0, 10)
         .join(', ')
     : 'none';
+  const codeChunks = Array.isArray(candidate.codeChunks)
+    ? candidate.codeChunks
+        .slice(0, CHUNK_CONTEXT_LIMIT)
+        .map((chunk) => `${formatChunkLocation(chunk)}:\n${String(chunk.content || '').slice(0, CHUNK_SNIPPET_LIMIT)}`)
+        .join('\n\n')
+    : '';
 
   return [
     `File: ${candidate.file_path}`,
     `Type: ${candidate.file_type || 'module'}`,
     `Summary: ${candidate.summary || 'No summary available'}`,
     `Declarations: ${declarations || 'none'}`,
+    codeChunks ? `Relevant source code:\n${codeChunks}` : '',
   ].join('\n');
 }
 
@@ -100,7 +118,10 @@ function keywordRerank(question, candidates) {
       const declarations = Array.isArray(candidate.declarations)
         ? candidate.declarations.map((entry) => entry?.name).filter(Boolean).join(' ')
         : '';
-      const haystack = [candidate.file_path, candidate.file_type, candidate.summary, declarations]
+      const chunkText = Array.isArray(candidate.codeChunks)
+        ? candidate.codeChunks.map((chunk) => chunk.content).filter(Boolean).join(' ')
+        : '';
+      const haystack = [candidate.file_path, candidate.file_type, candidate.summary, declarations, chunkText]
         .filter(Boolean)
         .join(' ')
         .toLowerCase();
@@ -120,6 +141,53 @@ function keywordRerank(question, candidates) {
       };
     })
     .sort((a, b) => b._score - a._score);
+}
+
+function mergeSemanticCandidates(fileRows, chunkRows) {
+  const byPath = new Map();
+
+  for (const row of fileRows || []) {
+    if (!row?.file_path) continue;
+    byPath.set(row.file_path, {
+      ...row,
+      distance: Number(row.distance),
+      codeChunks: [],
+    });
+  }
+
+  for (const row of chunkRows || []) {
+    if (!row?.file_path) continue;
+
+    const existing = byPath.get(row.file_path) || {
+      file_path: row.file_path,
+      file_type: row.file_type || 'module',
+      declarations: Array.isArray(row.declarations) ? row.declarations : [],
+      summary: row.summary || null,
+      distance: Number(row.distance),
+      codeChunks: [],
+    };
+
+    const chunkDistance = Number(row.distance);
+    existing.distance = Math.min(
+      Number.isFinite(Number(existing.distance)) ? Number(existing.distance) : 1,
+      Number.isFinite(chunkDistance) ? chunkDistance : 1,
+    );
+    existing.file_type = existing.file_type || row.file_type || 'module';
+    existing.declarations = existing.declarations || row.declarations || [];
+    existing.summary = existing.summary || row.summary || null;
+    existing.codeChunks.push({
+      chunk_index: row.chunk_index,
+      start_line: row.start_line,
+      end_line: row.end_line,
+      content: row.content,
+      distance: chunkDistance,
+    });
+
+    existing.codeChunks.sort((a, b) => Number(a.distance || 1) - Number(b.distance || 1));
+    byPath.set(row.file_path, existing);
+  }
+
+  return [...byPath.values()].sort((a, b) => Number(a.distance || 1) - Number(b.distance || 1));
 }
 
 export class QueryAgent extends BaseAgent {
@@ -200,6 +268,7 @@ export class QueryAgent extends BaseAgent {
             highlightedFiles: cached.highlightedFiles,
             confidence: cached.confidence,
             retrievedFiles: cached.retrievedFiles || 0,
+            retrievedChunks: cached.retrievedChunks || 0,
             queryEmbeddingTokens: cached.queryEmbeddingTokens || 0,
             completionTokens: cached.completionTokens || 0,
             cacheHit: true,
@@ -208,6 +277,7 @@ export class QueryAgent extends BaseAgent {
           warnings,
           metrics: {
             retrievedFiles: cached.retrievedFiles || 0,
+            retrievedChunks: cached.retrievedChunks || 0,
             queryEmbeddingTokens: cached.queryEmbeddingTokens || 0,
             completionTokens: cached.completionTokens || 0,
             cacheHit: 1,
@@ -227,7 +297,8 @@ export class QueryAgent extends BaseAgent {
         throw new Error('Failed to generate query embedding.');
       }
 
-      const semanticCandidates = await this.db.query(
+      const [semanticCandidates, chunkCandidates] = await Promise.all([
+        this.db.query(
         `
           SELECT
             fe.file_path,
@@ -244,9 +315,37 @@ export class QueryAgent extends BaseAgent {
           LIMIT ${SEMANTIC_CANDIDATE_LIMIT}
         `,
         [vectorLiteral, jobId],
-      );
+        ),
+        this.db.query(
+          `
+            SELECT
+              cc.file_path,
+              cc.chunk_index,
+              cc.start_line,
+              cc.end_line,
+              cc.content,
+              cc.embedding <=> $1::vector AS distance,
+              gn.file_type,
+              gn.declarations,
+              gn.summary
+            FROM code_chunks cc
+            JOIN graph_nodes gn
+              ON gn.job_id = cc.job_id
+             AND gn.file_path = cc.file_path
+            WHERE cc.job_id = $2
+            ORDER BY cc.embedding <=> $1::vector
+            LIMIT ${CHUNK_CANDIDATE_LIMIT}
+          `,
+          [vectorLiteral, jobId],
+        ).catch((error) => {
+          warnings.push(`Code chunk retrieval skipped: ${error.message}`);
+          return { rows: [] };
+        }),
+      ]);
 
-      const candidates = Array.isArray(semanticCandidates?.rows) ? semanticCandidates.rows : [];
+      const fileCandidates = Array.isArray(semanticCandidates?.rows) ? semanticCandidates.rows : [];
+      const codeChunkCandidates = Array.isArray(chunkCandidates?.rows) ? chunkCandidates.rows : [];
+      const candidates = mergeSemanticCandidates(fileCandidates, codeChunkCandidates);
       if (candidates.length === 0) {
         throw new Error('No semantic candidates found for this job.');
       }
@@ -323,6 +422,7 @@ export class QueryAgent extends BaseAgent {
         highlightedFiles,
         confidence: llmConfidence,
         retrievedFiles: topFiles.length,
+        retrievedChunks: topFiles.reduce((total, file) => total + (file.codeChunks?.length || 0), 0),
         queryEmbeddingTokens: Number(embeddingResponse?.usage?.total_tokens || 0),
         completionTokens: Number(completion?.usage?.completion_tokens || completion?.usage?.output_tokens || 0),
       };
@@ -347,6 +447,7 @@ export class QueryAgent extends BaseAgent {
         warnings,
         metrics: {
           retrievedFiles: result.retrievedFiles,
+          retrievedChunks: result.retrievedChunks,
           queryEmbeddingTokens: result.queryEmbeddingTokens,
           completionTokens: result.completionTokens,
           cacheHit: 0,

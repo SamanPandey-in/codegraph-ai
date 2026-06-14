@@ -312,7 +312,7 @@ export class PostgresGraphRepository extends IGraphRepository {
   }
 
   async deleteJob(jobId) {
-    const tables = ['graph_nodes', 'graph_edges', 'file_embeddings', 'function_nodes', 'api_contracts'];
+    const tables = ['graph_nodes', 'graph_edges', 'file_embeddings', 'function_embeddings', 'code_chunks', 'function_nodes', 'api_contracts'];
     for (const table of tables) {
       await this.pgPool.query(`DELETE FROM ${table} WHERE job_id = $1`, [jobId]);
     }
