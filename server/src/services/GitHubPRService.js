@@ -115,7 +115,7 @@ class GitHubPRService {
 
     const timestamp = new Date().toISOString();
 
-    return `## 📊 PolyGlot Impact Analysis
+    return `## 📊 Polyglot Impact Analysis
 
 **Generated:** ${timestamp}  
 **Status:** ✅ Analysis Complete
@@ -128,6 +128,38 @@ ${impactedList}
 
 ---
 🔗 [View Full Graph](${graphUrl || '#'}) | Powered by PolyGlot`;
+  }
+
+  /**
+   * Format a richer impact analysis comment using optional risk metadata.
+   * @param {Array<string>} changedFiles
+   * @param {Array<string>} impactedFiles
+   * @param {string} graphUrl
+   * @param {{ safeFiles?: Array<string>, riskyFiles?: Array<string> }} [riskSummary]
+   * @returns {string}
+   */
+  formatDetailedImpactComment(changedFiles, impactedFiles, graphUrl, riskSummary = null) {
+    const base = this.formatImpactComment(changedFiles, impactedFiles, graphUrl);
+
+    const safeFiles = Array.isArray(riskSummary?.safeFiles) ? riskSummary.safeFiles.filter(Boolean) : [];
+    const riskyFiles = Array.isArray(riskSummary?.riskyFiles) ? riskSummary.riskyFiles.filter(Boolean) : [];
+
+    if (safeFiles.length === 0 && riskyFiles.length === 0) {
+      return base;
+    }
+
+    const formatList = (items) => items.map((file) => `- \`${file}\``).join('\n');
+    const sections = [base, '### Risk Summary'];
+
+    if (riskyFiles.length > 0) {
+      sections.push(`#### Risky Changed Files (${riskyFiles.length})`, formatList(riskyFiles));
+    }
+
+    if (safeFiles.length > 0) {
+      sections.push(`#### Safe Changed Files (${safeFiles.length})`, formatList(safeFiles));
+    }
+
+    return sections.join('\n\n');
   }
 
   /**
@@ -155,6 +187,23 @@ ${impactedList}
     } catch (err) {
       throw new Error(`Failed to post PR comment: ${err.message}`);
     }
+  }
+
+  async postComment(owner, repo, prNumber, comment) {
+    return this.postPRComment(owner, repo, prNumber, comment);
+  }
+
+  async upsertImpactComment(owner, repo, prNumber, comment) {
+    if (!this.isConfigured()) {
+      throw new Error('GitHub token not configured. Set GITHUB_TOKEN env var.');
+    }
+
+    const existingComment = await this.findExistingComment(owner, repo, prNumber);
+    if (existingComment) {
+      return this.updatePRComment(owner, repo, existingComment.id, comment);
+    }
+
+    return this.postComment(owner, repo, prNumber, comment);
   }
 
   /**
@@ -198,7 +247,10 @@ ${impactedList}
 
     try {
       const response = await this.client.get(`/repos/${owner}/${repo}/issues/${prNumber}/comments`);
-      const comment = response.data.find((c) => c.body.includes('PolyGlot Impact Analysis'));
+      const comment = response.data.find((c) => {
+        const body = String(c?.body || '');
+        return body.includes('Polyglot Impact Analysis') || body.includes('PolyGlot Impact Analysis');
+      });
       return comment ? { id: comment.id } : null;
     } catch (err) {
       logger.error('Failed to find existing comment:', err.message);

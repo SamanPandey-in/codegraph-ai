@@ -448,20 +448,21 @@ export class SupervisorAgent {
       const changedFiles = GitHubPRService.parseDiff(diff).map((f) => f.file);
       if (changedFiles.length === 0) return;
 
-      const { impactedFiles } = await ImpactAnalysisService.findImpactedFiles(jobId, changedFiles, 3);
+      const [impactResult, riskResult] = await Promise.all([
+        ImpactAnalysisService.findImpactedFiles(jobId, changedFiles, 3),
+        ImpactAnalysisService.analyzeChangeRisk(jobId, changedFiles),
+      ]);
+
+      const { impactedFiles } = impactResult;
       const graphUrl = `${process.env.CLIENT_URL || 'http://localhost:5173'}/graph?jobId=${jobId}`;
-      const comment  = GitHubPRService.formatImpactComment(
+      const comment  = GitHubPRService.formatDetailedImpactComment(
         changedFiles,
         Array.from(impactedFiles).sort(),
         graphUrl,
+        riskResult,
       );
 
-      const existing = await GitHubPRService.findExistingComment(owner, repo, parseInt(prNumber, 10));
-      if (existing) {
-        await GitHubPRService.updatePRComment(owner, repo, existing.id, comment);
-      } else {
-        await GitHubPRService.postPRComment(owner, repo, parseInt(prNumber, 10), comment);
-      }
+      await GitHubPRService.upsertImpactComment(owner, repo, parseInt(prNumber, 10), comment);
 
       const { logger } = await import('../../utils/logger.js');
       logger.info(`[SupervisorAgent] PR comment posted to ${owner}/${repo}#${prNumber}`);

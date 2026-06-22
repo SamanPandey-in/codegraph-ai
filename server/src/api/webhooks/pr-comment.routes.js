@@ -100,50 +100,33 @@ export function createPrCommentRouter({
       }
 
       // Find impacted files in code graph
-      const { impactedFiles: impactedSet, depth } = await ImpactAnalysisService.findImpactedFiles(
-        jobId,
-        changedFiles,
-        3, // max depth
-      );
+      const [impactResult, riskResult] = await Promise.all([
+        ImpactAnalysisService.findImpactedFiles(jobId, changedFiles, 3),
+        ImpactAnalysisService.analyzeChangeRisk(jobId, changedFiles),
+      ]);
+
+      const { impactedFiles: impactedSet, depth } = impactResult;
 
       const impactedFiles = Array.from(impactedSet).sort();
 
       // Format impact comment
       const graphUrl = `${process.env.CLIENT_URL || 'http://localhost:5173'}/?jobId=${jobId}`;
-      const comment = resolvedGitHubPRService.formatImpactComment(changedFiles, impactedFiles, graphUrl);
+      const comment = resolvedGitHubPRService.formatDetailedImpactComment(
+        changedFiles,
+        impactedFiles,
+        graphUrl,
+        riskResult,
+      );
 
-      // Check if comment already exists
-      let existingComment;
+      let result;
       try {
-        existingComment = await resolvedGitHubPRService.findExistingComment(
+        result = await resolvedGitHubPRService.upsertImpactComment(
           owner,
           repo,
           parseInt(prNumber, 10),
+          comment,
         );
-      } catch (err) {
-        logger.error('Failed to find existing comment:', err.message);
-      }
-
-      // Post or update comment
-      let result;
-      try {
-        if (existingComment) {
-          result = await resolvedGitHubPRService.updatePRComment(
-            owner,
-            repo,
-            existingComment.id,
-            comment,
-          );
-          logger.info(`Updated PR comment #${existingComment.id} on ${owner}/${repo}#${prNumber}`);
-        } else {
-          result = await resolvedGitHubPRService.postPRComment(
-            owner,
-            repo,
-            parseInt(prNumber, 10),
-            comment,
-          );
-          logger.info(`Posted PR comment on ${owner}/${repo}#${prNumber}`);
-        }
+        logger.info(`Upserted PR comment on ${owner}/${repo}#${prNumber}`);
       } catch (err) {
         logger.error('Failed to post/update PR comment:', err.message);
         return res.status(200).json({
