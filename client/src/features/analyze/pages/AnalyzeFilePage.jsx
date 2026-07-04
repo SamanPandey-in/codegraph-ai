@@ -152,6 +152,9 @@ export default function AnalyzeFilePage() {
     selectedSnippet: '',
     lineStart: null,
     lineEnd: null,
+    highlightRanges: [],
+    highlightMode: 'none',
+    highlightModeNotice: '',
     data: null,
   });
   const [isCreatePrModalOpen, setIsCreatePrModalOpen] = useState(false);
@@ -831,7 +834,7 @@ export default function AnalyzeFilePage() {
           if (impactResp.ok) {
             impactData = await impactResp.json();
           }
-        } catch (e) {
+        } catch {
           // best-effort; ignore
         }
 
@@ -1186,34 +1189,66 @@ export default function AnalyzeFilePage() {
                       value={snippetState.highlightMode || 'none'}
                       onChange={async (e) => {
                         const mode = String(e.target.value || 'none');
-                        setSnippetState((s) => ({ ...s, highlightMode: mode }));
+                        setSnippetState((s) => ({ ...s, highlightMode: mode, highlightModeNotice: '' }));
 
                         if (!analysisJobId || !selectedFilePath) return;
 
-                        if (mode === 'none') return;
+                        if (mode === 'none') {
+                          setSnippetState((s) => ({ ...s, highlightRanges: [], highlightModeNotice: '' }));
+                          return;
+                        }
 
                         try {
-                          const payload = await (await fetch(`/api/graph/${encodeURIComponent(analysisJobId)}`)).json();
-                          const edges = Array.isArray(payload?.edges) ? payload.edges : payload?.graph?.edges || [];
+                          // Phase C: dependency highlight modes — direct imports out of this file,
+                          // calls this file makes, and edges where this file is the referenced
+                          // target (i.e. other files importing/calling into it).
+                          const payload = await graphService.getGraph(analysisJobId);
+                          const edges = Array.isArray(payload?.edges) ? payload.edges : [];
+
                           const ranges = [];
                           for (const edge of edges) {
-                            if (edge.source === selectedFilePath && (mode === 'imports' ? edge.edge_type === 'IMPORTS' : mode === 'calls' ? edge.edge_type === 'CALLS' : false)) {
+                            const isOutbound = edge.source === selectedFilePath;
+                            const isInbound = edge.target === selectedFilePath;
+
+                            if (mode === 'imports' && isOutbound && edge.type === 'IMPORTS') {
                               if (edge.source_lines) ranges.push(edge.source_lines);
-                              else if (edge.source_lines_json) ranges.push(edge.source_lines_json);
+                            } else if (mode === 'calls' && isOutbound && edge.type === 'CALLS') {
+                              if (edge.source_lines) ranges.push(edge.source_lines);
+                            } else if (mode === 'referenced' && isInbound) {
+                              if (edge.target_lines) ranges.push(edge.target_lines);
                             }
                           }
-                          setSnippetState((s) => ({ ...s, highlightRanges: ranges }));
+
+                          setSnippetState((s) => ({
+                            ...s,
+                            highlightRanges: ranges,
+                            highlightModeNotice:
+                              ranges.length === 0
+                                ? 'No line-level data found for this mode on the selected file yet.'
+                                : '',
+                          }));
                         } catch {
-                          // ignore
+                          setSnippetState((s) => ({
+                            ...s,
+                            highlightRanges: [],
+                            highlightModeNotice: 'Could not load dependency highlight data.',
+                          }));
                         }
                       }}
                       className="text-xs bg-transparent"
                     >
                       <option value="none">None</option>
-                      <option value="imports">Imports</option>
+                      <option value="imports">Direct imports</option>
                       <option value="calls">Calls</option>
+                      <option value="referenced">Referenced by others</option>
                     </select>
                   </div>
+
+                  {snippetState.highlightMode && snippetState.highlightMode !== 'none' && snippetState.highlightModeNotice && (
+                    <span className="text-[10px] text-muted-foreground/70">
+                      {snippetState.highlightModeNotice}
+                    </span>
+                  )}
 
                   <span className="inline-flex items-center gap-1.5 rounded-lg border border-border/60 bg-background/70 px-2 py-1 text-[10px] text-muted-foreground">
                     <span className={`size-1.5 rounded-full ${snippetStatusMeta.dotClass}`} />

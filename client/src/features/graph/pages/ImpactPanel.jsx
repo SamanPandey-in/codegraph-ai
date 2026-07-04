@@ -26,7 +26,21 @@ const SEVERITY_CONFIG = {
   },
 };
 
+function formatLineRange(range) {
+  if (!Array.isArray(range) || range.length < 2) return null;
+  const start = Number(range[0]);
+  const end = Number(range[1]);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+  return start === end ? `Line ${start}` : `Lines ${Math.min(start, end)}–${Math.max(start, end)}`;
+}
+
 function NodeRow({ node, color }) {
+  const sourceLineLabel = formatLineRange(node.lines?.source);
+  const targetLineLabel = formatLineRange(node.lines?.target);
+  // Prefer the line range on the impacted file's own side of the edge (source);
+  // fall back to the target side if that's the only one the relationship recorded.
+  const lineLabel = sourceLineLabel || targetLineLabel;
+
   return (
     <div className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-mono ${color}`}>
       <ChevronRight className="size-3 shrink-0 opacity-60" />
@@ -34,6 +48,11 @@ function NodeRow({ node, color }) {
       <span className="shrink-0 rounded-full border border-current/20 bg-background/60 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.16em] opacity-80">
         {String(node.relationshipType || 'IMPORTS')}
       </span>
+      {lineLabel && (
+        <span className="shrink-0 rounded-full border border-current/20 bg-background/40 px-1.5 py-0.5 text-[9px] font-medium opacity-70">
+          {lineLabel}
+        </span>
+      )}
       <span className="ml-auto shrink-0 opacity-50">depth {node.depth}</span>
     </div>
   );
