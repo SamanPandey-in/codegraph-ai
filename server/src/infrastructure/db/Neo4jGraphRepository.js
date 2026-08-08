@@ -86,6 +86,7 @@ export class Neo4jGraphRepository extends IGraphRepository {
           path:     filePath,
           type:     node?.type     || 'module',
           language: node?.language || 'unknown',
+          rawContent: node?.rawContent || null,
           isDead:   deadCodeSet.has(filePath),
           jobId,
         }));
@@ -95,7 +96,41 @@ export class Neo4jGraphRepository extends IGraphRepository {
            MERGE (f:CodeFile { jobId: item.jobId, path: item.path })
            SET f.type     = item.type,
                f.language = item.language,
+               f.rawContent = item.rawContent,
                f.isDead   = item.isDead`,
+          { batch },
+        );
+      }
+
+      const functionEntries = Object.entries(params.functionNodes || {});
+      const FUNCTION_BATCH = 100;
+
+      for (let i = 0; i < functionEntries.length; i += FUNCTION_BATCH) {
+        const batch = [];
+        for (const [filePath, declarations] of functionEntries.slice(i, i + FUNCTION_BATCH)) {
+          for (const declaration of Array.isArray(declarations) ? declarations : []) {
+            if (!declaration?.name) continue;
+            batch.push({
+              jobId,
+              filePath,
+              name: declaration.name,
+              kind: declaration.kind || 'function',
+              calls: Array.isArray(declaration.calls) ? declaration.calls : [],
+              loc: Number.isFinite(Number(declaration.loc)) ? declaration.loc : null,
+              bodySource: declaration.bodySource || null,
+            });
+          }
+        }
+
+        if (batch.length === 0) continue;
+
+        await session.run(
+          `UNWIND $batch AS item
+           MERGE (s:Symbol { jobId: item.jobId, filePath: item.filePath, name: item.name })
+           SET s.kind = item.kind,
+               s.calls = item.calls,
+               s.loc = item.loc,
+               s.bodySource = item.bodySource`,
           { batch },
         );
       }
@@ -130,7 +165,10 @@ export class Neo4jGraphRepository extends IGraphRepository {
               `UNWIND $edges AS e
                MERGE (src:CodeFile { jobId: $jobId, path: e.source })
                MERGE (tgt:Symbol { jobId: $jobId, filePath: e.source, name: e.symbolName, kind: e.symbolKind })
-               MERGE (src)-[:\`${relType}\` { jobId: $jobId }]->(tgt)`,
+               SET tgt.bodySource = coalesce(tgt.bodySource, e.bodySource)
+               MERGE (src)-[r:\`${relType}\` { jobId: $jobId }]->(tgt)
+               SET r.source_lines = e.source_lines,
+                   r.target_lines = e.target_lines`,
               { edges: processedEdges, jobId },
             );
           } else {
@@ -139,7 +177,9 @@ export class Neo4jGraphRepository extends IGraphRepository {
               `UNWIND $edges AS e
                MERGE (src:CodeFile { jobId: $jobId, path: e.source })
                MERGE (tgt:\`${targetLabel}\` { jobId: $jobId, path: e.target })
-               MERGE (src)-[:\`${relType}\` { jobId: $jobId }]->(tgt)`,
+               MERGE (src)-[r:\`${relType}\` { jobId: $jobId }]->(tgt)
+               SET r.source_lines = e.source_lines,
+                   r.target_lines = e.target_lines`,
               { edges: typeEdges, jobId },
             );
           }

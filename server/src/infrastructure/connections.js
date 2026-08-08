@@ -19,13 +19,13 @@ const pgPoolMax = Number.parseInt(process.env.PG_POOL_MAX || '10', 10);
  */
 const isSupabase = databaseUrl.includes('supabase.com');
 
-const isTestRuntime = process.argv.includes('--test') || Boolean(process.env.VITEST);
+const isTestRuntime = Boolean(process.env.VITEST);
 
 let pgPool;
 let redisClient;
 
 if (isTestRuntime) {
-  // Lightweight in-process mocks used during node --test or vitest runs.
+  // Lightweight in-process mocks used during vitest unit test runs.
   pgPool = {
     query: async (sql) => {
       const s = String(sql || '').toLowerCase();

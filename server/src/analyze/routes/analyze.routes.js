@@ -30,6 +30,10 @@ import {
   validateLocalPathController,
 } from '../localPicker/localPicker.controller.js';
 import { analyzeController } from '../upload/upload.controller.js';
+import {
+  isWatching,
+  stopLocalWatch,
+} from '../services/localWatcher.service.js';
 
 const router = Router();
 
@@ -46,6 +50,20 @@ router.get('/local/picker-capabilities', analyzeLimiter, localPickerCapabilities
 router.get('/history', analyzeLimiter, listAnalysisHistoryController);
 router.get('/local/browse', analyzeLimiter, browseLocalPathController);
 router.post('/local/validate', analyzeLimiter, validateLocalPathBody, validateLocalPathController);
+router.delete('/local/:repoId/watch', analyzeLimiter, (req, res) => {
+  const repoId = String(req.params?.repoId || '').trim();
+
+  if (!repoId) {
+    return res.status(400).json({ error: 'repoId is required.' });
+  }
+
+  if (!isWatching(repoId)) {
+    return res.status(404).json({ error: `No active watcher found for repoId: ${repoId}` });
+  }
+
+  stopLocalWatch(repoId);
+  return res.status(200).json({ success: true, repoId, watching: false });
+});
 router.post('/github/public/resolve', analyzeLimiter, validatePublicRepoBody, resolvePublicRepoController);
 router.get('/github/repos', analyzeLimiter, listOwnedReposController);
 router.get('/github/branches', analyzeLimiter, validateBranchQuery, listBranchesController);

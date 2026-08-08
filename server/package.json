@@ -9,9 +9,9 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "migrate": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/001_initial.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/002_function_nodes.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/003_share_tokens.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/004_analysis_jobs_metadata.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/005_polyglot_statuses.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/006_contracts.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/007_hot_query_indexes.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/008_db_type_column.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/009_conversations.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/010_raw_content.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/011_directories.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/012_edge_line_numbers.sql",
+    "migrate": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/001_initial.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/002_function_nodes.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/003_share_tokens.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/004_analysis_jobs_metadata.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/005_polyglot_statuses.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/006_contracts.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/007_hot_query_indexes.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/008_db_type_column.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/009_conversations.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/010_raw_content.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/011_directories.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/012_edge_line_numbers.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ./src/infrastructure/migrations/013_raw_content_nodes.sql",
     "db:migrate": "npm run migrate",
-    "test": "node --test test/cache.metrics.test.js test/cacheMetricsPersistence.test.js test/repositories.cache-metrics.test.js test/ai.queries.test.js test/ai.snippet-impact.test.js test/ai.suggest-refactor.test.js test/graph.heatmap.test.js test/jobs.stream.auth.test.js test/github.webhook.test.js test/parser.multilang.test.js test/pr-comment.test.js test/snippet.analyzer.confidence.test.js test/graph-rag-expander.test.js test/function-chunker.test.js",
+    "test": "node --test test/cache.metrics.test.js test/cacheMetricsPersistence.test.js test/repositories.cache-metrics.test.js test/ai.queries.test.js test/ai.snippet-impact.test.js test/ai.suggest-refactor.test.js test/graph.heatmap.test.js test/jobs.stream.auth.test.js test/github.webhook.test.js test/parser.multilang.test.js test/pr-comment.test.js test/snippet.analyzer.confidence.test.js test/graph-rag-expander.test.js test/function-chunker.test.js test/query-agent-code-chunks.test.js test/graph-payload.line-data.test.js test/pr-comment-worker-integration.test.js",
     "test:ai-queries": "node --test test/ai.queries.test.js",
     "test:unit": "vitest run --configLoader native --pool threads",
     "test:coverage": "vitest run --coverage --configLoader native --pool threads",
@@ -25,6 +25,7 @@
     "axios": "^1.6.8",
     "bcrypt": "^6.0.0",
     "bullmq": "^5.71.1",
+    "chokidar": "^4.0.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
@@ -49,6 +50,7 @@
     "dotenv-cli": "^11.0.0",
     "eslint": "^9.39.2",
     "nodemon": "^3.1.11",
+    "pino-pretty": "^13.0.0",
     "prettier": "^3.7.4",
     "supertest": "^7.1.4",
     "vitest": "^4.0.8"

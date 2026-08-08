@@ -19,7 +19,7 @@ COPY package*.json ./
 
 # Install ONLY production dependencies
 # (nodemon, vitest, etc. are devDependencies and intentionally excluded)
-RUN npm ci --omit=dev
+RUN npm ci --include=dev
 
 # Copy source code
 COPY . .

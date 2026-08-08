@@ -2,6 +2,7 @@ import { Queue, Worker } from 'bullmq';
 import { logger } from '../utils/logger.js';
 import { SupervisorAgent } from '../agents/core/SupervisorAgent.js';
 import { pgPool, redisClient } from '../infrastructure/connections.js';
+import { postImpactCommentForJob } from '../api/webhooks/pr-comment.routes.js';
 
 const queueConcurrency = Number(process.env.QUEUE_CONCURRENCY || 3);
 
@@ -48,8 +49,18 @@ function buildWorker() {
     }, 'analysis_job_failed');
   });
 
-  worker.on('completed', (job) => {
+  worker.on('completed', (job, result) => {
     logger.info({ jobId: job.id }, 'analysis_job_completed');
+
+    // Best-effort PR enrichment: only meaningful for jobs that actually
+    // finished successfully. Fire-and-forget — a comment-posting failure
+    // (bad token, GitHub outage, PR closed mid-analysis) must never affect
+    // the job's own completion status, which has already been persisted.
+    if (result?.status === 'completed') {
+      postImpactCommentForJob(job.data.jobId).catch((error) => {
+        logger.error({ jobId: job.data.jobId, error: error.message }, 'github_pr_impact_comment_unhandled_error');
+      });
+    }
   });
 
   return worker;

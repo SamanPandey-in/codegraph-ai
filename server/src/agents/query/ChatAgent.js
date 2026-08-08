@@ -7,8 +7,11 @@ import { GraphRagExpander } from './GraphRagExpander.js';
 
 const CACHE_TTL_SECONDS = Number(process.env.AI_CACHE_TTL_SECONDS || 3600);
 const SEMANTIC_LIMIT = 20;
+const CHUNK_SEMANTIC_LIMIT = 20;
 const CONTEXT_FILE_LIMIT = 12;
 const HISTORY_TURN_LIMIT = 6;
+const CHUNK_CONTEXT_LIMIT = 3;
+const CHUNK_SNIPPET_LIMIT = 900;
 
 function toVectorLiteral(vector) {
   if (!Array.isArray(vector) || vector.length === 0) return null;
@@ -39,6 +42,10 @@ function keywordRerank(question, candidates) {
       const relationshipText = (candidate.relationships || [])
         .map((entry) => `${entry.type} ${entry.target}`)
         .join(' ');
+      const chunkText = (candidate.codeChunks || [])
+        .map((entry) => entry.content)
+        .filter(Boolean)
+        .join(' ');
       const haystack = [
         candidate.filePath,
         candidate.fileType,
@@ -46,6 +53,7 @@ function keywordRerank(question, candidates) {
         declarations,
         functionText,
         relationshipText,
+        chunkText,
       ]
         .filter(Boolean)
         .join(' ')
@@ -62,6 +70,14 @@ function keywordRerank(question, candidates) {
       };
     })
     .sort((a, b) => b._score - a._score);
+}
+
+function formatChunkLocation(chunk) {
+  if (Number.isFinite(Number(chunk.startLine)) && Number.isFinite(Number(chunk.endLine))) {
+    return `lines ${chunk.startLine}-${chunk.endLine}`;
+  }
+
+  return `chunk ${Number(chunk.chunkIndex || 0) + 1}`;
 }
 
 function buildContextBlock(contextEntries) {
@@ -89,6 +105,10 @@ function buildContextBlock(contextEntries) {
           return `  ${fn.functionName}: ${snippet}`;
         })
         .join('\n');
+      const codeChunks = (entry.codeChunks || [])
+        .slice(0, CHUNK_CONTEXT_LIMIT)
+        .map((chunk) => `  ${formatChunkLocation(chunk)}:\n${String(chunk.content || '').slice(0, CHUNK_SNIPPET_LIMIT)}`)
+        .join('\n');
 
       return [
         `[${index + 1}] File: ${entry.filePath}`,
@@ -97,6 +117,7 @@ function buildContextBlock(contextEntries) {
         `    Exports: ${exports}`,
         relationships ? `    Relationships:\n${relationships}` : '',
         functions ? `    Relevant functions:\n${functions}` : '',
+        codeChunks ? `    Relevant source code:\n${codeChunks}` : '',
       ].filter(Boolean).join('\n');
     })
     .join('\n\n');
@@ -292,18 +313,59 @@ if (this.embeddingClient.isConfigured()) {
           const vectorLiteral = toVectorLiteral(embeddingResponse?.data?.[0]?.embedding);
 
           if (vectorLiteral) {
-            const semanticResult = await this.db.query(
-              `SELECT fe.file_path, fe.embedding <=> $1::vector AS distance
-               FROM file_embeddings fe
-               WHERE fe.job_id = $2
-               ORDER BY fe.embedding <=> $1::vector
-               LIMIT $3`,
-              [vectorLiteral, jobId, SEMANTIC_LIMIT],
-            ).catch(() => ({ rows: [] }));
+            const [semanticResult, chunkResult] = await Promise.all([
+              this.db.query(
+                `SELECT fe.file_path, fe.embedding <=> $1::vector AS distance
+                 FROM file_embeddings fe
+                 WHERE fe.job_id = $2
+                 ORDER BY fe.embedding <=> $1::vector
+                 LIMIT $3`,
+                [vectorLiteral, jobId, SEMANTIC_LIMIT],
+              ).catch(() => ({ rows: [] })),
+              this.db.query(
+                `SELECT file_path, chunk_index, start_line, end_line, content, embedding <=> $1::vector AS distance
+                 FROM code_chunks
+                 WHERE job_id = $2
+                 ORDER BY embedding <=> $1::vector
+                 LIMIT $3`,
+                [vectorLiteral, jobId, CHUNK_SEMANTIC_LIMIT],
+              ).catch((error) => {
+                warnings.push(`Code chunk retrieval skipped: ${error.message}`);
+                return { rows: [] };
+              }),
+            ]);
 
             const semanticRows = Array.isArray(semanticResult.rows) ? semanticResult.rows : [];
-            const seedPaths = semanticRows.map((row) => row.file_path).filter(Boolean);
+            const chunkRows = Array.isArray(chunkResult.rows) ? chunkResult.rows : [];
+            const seedPaths = [
+              ...semanticRows.map((row) => row.file_path),
+              ...chunkRows.map((row) => row.file_path),
+            ].filter((path, index, paths) => path && paths.indexOf(path) === index);
             const distanceMap = new Map(semanticRows.map((row) => [row.file_path, Number(row.distance)]));
+            const chunksByFile = new Map();
+
+            for (const row of chunkRows) {
+              if (!row.file_path) continue;
+
+              const chunkDistance = Number(row.distance);
+              const existingDistance = distanceMap.has(row.file_path)
+                ? Number(distanceMap.get(row.file_path))
+                : 1;
+              distanceMap.set(row.file_path, Math.min(existingDistance, Number.isFinite(chunkDistance) ? chunkDistance : 1));
+
+              if (!chunksByFile.has(row.file_path)) chunksByFile.set(row.file_path, []);
+              chunksByFile.get(row.file_path).push({
+                chunkIndex: row.chunk_index,
+                startLine: row.start_line,
+                endLine: row.end_line,
+                content: row.content,
+                distance: chunkDistance,
+              });
+            }
+
+            for (const chunks of chunksByFile.values()) {
+              chunks.sort((a, b) => Number(a.distance || 1) - Number(b.distance || 1));
+            }
 
             const enriched = await this.expander.getEnrichedContext(seedPaths, jobId, {
               maxFiles: CONTEXT_FILE_LIMIT,
@@ -314,6 +376,7 @@ if (this.embeddingClient.isConfigured()) {
               ...entry,
               distance: distanceMap.get(entry.filePath) ?? entry.distance,
               functionMatches: [],
+              codeChunks: chunksByFile.get(entry.filePath) || [],
             }));
 
             try {
@@ -511,14 +574,15 @@ if (this.embeddingClient.isConfigured()) {
       jobId,
       status: streamError ? 'partial' : 'success',
       confidence: confidence === 'high' ? 0.9 : confidence === 'medium' ? 0.7 : 0.5,
-      data: {
-        text: fullText,
-        sources: sourcePaths,
-        conversationId: activeConversationId,
-        confidence,
+                data: {
+                  text: fullText,
+                  sources: sourcePaths,
+                  conversationId: activeConversationId,
+                  confidence,
         fallback: Boolean(streamError),
         cacheHit: false,
         retrievedFiles: contextEntries.length,
+        retrievedChunks: contextEntries.reduce((total, entry) => total + (entry.codeChunks?.length || 0), 0),
       },
       errors,
       warnings,
@@ -526,6 +590,7 @@ if (this.embeddingClient.isConfigured()) {
         embeddingTokens,
         completionTokens,
         retrievedFiles: contextEntries.length,
+        retrievedChunks: contextEntries.reduce((total, entry) => total + (entry.codeChunks?.length || 0), 0),
         cacheHit: 0,
       },
       processingTimeMs: Date.now() - start,

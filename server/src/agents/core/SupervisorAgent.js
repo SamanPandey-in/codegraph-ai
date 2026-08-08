@@ -17,6 +17,7 @@ import { JobStatusEmitter } from './JobStatusEmitter.js';
 import { decideConfidence, computeOverallConfidence } from './confidence.js';
 import GitHubPRService from '../../services/GitHubPRService.js';
 import ImpactAnalysisService from '../../services/ImpactAnalysisService.js';
+import { startLocalWatch } from '../../analyze/services/localWatcher.service.js';
 import {
   buildGraphCacheKey,
   deleteCacheKey,
@@ -251,6 +252,13 @@ export class SupervisorAgent {
         edgeCount: pipelineData.edges?.length || 0,
       });
 
+      if (input?.source === 'local' && input?.repositoryId && input?.localPath) {
+        startLocalWatch(String(input.repositoryId), input.localPath, {
+          repositoryId: input.repositoryId,
+          userId: input.userId || null,
+        });
+      }
+
       await this._tryPostPRComment(jobId, input);
       await this.agents.ingestion.cleanup(pipelineData.tempRoot);
 
@@ -440,20 +448,21 @@ export class SupervisorAgent {
       const changedFiles = GitHubPRService.parseDiff(diff).map((f) => f.file);
       if (changedFiles.length === 0) return;
 
-      const { impactedFiles } = await ImpactAnalysisService.findImpactedFiles(jobId, changedFiles, 3);
+      const [impactResult, riskResult] = await Promise.all([
+        ImpactAnalysisService.findImpactedFiles(jobId, changedFiles, 3),
+        ImpactAnalysisService.analyzeChangeRisk(jobId, changedFiles),
+      ]);
+
+      const { impactedFiles } = impactResult;
       const graphUrl = `${process.env.CLIENT_URL || 'http://localhost:5173'}/graph?jobId=${jobId}`;
-      const comment  = GitHubPRService.formatImpactComment(
+      const comment  = GitHubPRService.formatDetailedImpactComment(
         changedFiles,
         Array.from(impactedFiles).sort(),
         graphUrl,
+        riskResult,
       );
 
-      const existing = await GitHubPRService.findExistingComment(owner, repo, parseInt(prNumber, 10));
-      if (existing) {
-        await GitHubPRService.updatePRComment(owner, repo, existing.id, comment);
-      } else {
-        await GitHubPRService.postPRComment(owner, repo, parseInt(prNumber, 10), comment);
-      }
+      await GitHubPRService.upsertImpactComment(owner, repo, parseInt(prNumber, 10), comment);
 
       const { logger } = await import('../../utils/logger.js');
       logger.info(`[SupervisorAgent] PR comment posted to ${owner}/${repo}#${prNumber}`);

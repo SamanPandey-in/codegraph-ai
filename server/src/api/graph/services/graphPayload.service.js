@@ -28,7 +28,7 @@ export async function loadGraphPayloadByJobId(jobId) {
     ),
     pgPool.query(
       `
-        SELECT source_path, target_path, edge_type
+        SELECT source_path, target_path, edge_type, source_lines, target_lines
         FROM graph_edges
         WHERE job_id = $1
       `,
@@ -52,6 +52,10 @@ export async function loadGraphPayloadByJobId(jobId) {
       source: row.source_path,
       target: row.target_path,
       type: row.edge_type || 'import',
+      // Phase C: line-level highlight data — populated by RelationshipExtractorAgent
+      // for IMPORTS/CALLS edges, null for relationship types without a line anchor.
+      source_lines: row.source_lines || null,
+      target_lines: row.target_lines || null,
     };
   });
 

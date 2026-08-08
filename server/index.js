@@ -27,6 +27,7 @@ import { bootstrapGraphInfrastructure } from './src/infrastructure/db/startup.js
 import { pgPool, redisClient } from './src/infrastructure/connections.js';
 import { logger } from './src/utils/logger.js';
 import { closeNeo4jDriver } from './src/infrastructure/db/neo4jDriver.js';
+import { stopAllLocalWatchers } from './src/analyze/services/localWatcher.service.js';
 
 if (process.env.SENTRY_DSN) {
   Sentry.init({
@@ -53,6 +54,7 @@ async function shutdown(signal) {
     pgPool.end().then(() => logger.info('[Shutdown] Postgres pool closed')),
     redisClient.quit().then(() => logger.info('[Shutdown] Redis client closed')),
     closeNeo4jDriver().then(() => logger.info('[Shutdown] Neo4j driver closed')),
+    Promise.resolve().then(() => stopAllLocalWatchers()),
   ]);
   logger.info('[Shutdown] Done.');
   process.exit(0);
