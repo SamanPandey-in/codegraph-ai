@@ -62,7 +62,7 @@ const LandingPage = () => {
               to="/signup"
               className="px-6 py-2.5 rounded-full text-sm font-semibold transition-all bg-white text-black hover:bg-slate-200"
             >
-              Get started
+              It must work
             </Link>
           </div>
         </nav>
