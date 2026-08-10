@@ -55,7 +55,7 @@ const LandingPage = () => {
               to="/login"
               className="hidden sm:block text-sm font-medium text-slate-300 hover:text-white transition-colors"
             >
-              Sign in
+              Kkkkkk
             </Link>
             <Link
               to="/signup"
