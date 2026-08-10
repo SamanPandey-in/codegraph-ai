@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, CheckCircle2 } from 'lucide-react';
 import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion';
 import Logo from './Logo';
-
 import DependencyImpactVisualizer from './DependencyImpactVisualizer';
 import ExpandableFeatureCards from './ExpandableFeatureCards';
 import ProblemSection from './ProblemSection';
@@ -86,7 +85,7 @@ const LandingPage = () => {
               Hello from <br />
               Dreamer. <br />
               <span className="font-bold text-gradient-gold">
-                your webhooks are working test6.
+                your webhooks are working test7.
               </span>
             </motion.h1>
 
