@@ -82,11 +82,10 @@ const LandingPage = () => {
               transition={{ duration: 0.6, delay: 0.1 }}
               className="font-display font-medium text-5xl sm:text-6xl lg:text-[4.75rem] tracking-tight leading-[1.05] mb-5 text-slate-100"
             >
-              Hello from <br />
-              Dreamer. <br />
+              Dreamer, It's <br />
+              done bro. <br />
               <span className="font-bold text-gradient-gold">
-                your webhooks are working finalyyyy12.
-                and aso sleepinf
+                Webhooks are now working fine..
               </span>
             </motion.h1>
 
