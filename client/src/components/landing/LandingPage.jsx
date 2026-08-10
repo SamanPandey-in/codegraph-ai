@@ -85,7 +85,7 @@ const LandingPage = () => {
               Dreamer, It's <br />
               done bro. <br />
               <span className="font-bold text-gradient-gold">
-                Webhooks are now working fine..
+                Webhooks are now working fine finally...
               </span>
             </motion.h1>
 
